@@ -1,0 +1,12 @@
+[
+  {
+    "source_id": "siem-01",
+    "vendor": "Splunk",
+    "raw_payload": "{\"event_type\": \"SUSPICIOUS_POWERSHELL\", \"user_id\": \"usr-admin\", \"host_id\": \"host-srv-01\", \"ip\": \"192.168.1.105\", \"mitre_tactic\": \"EXECUTION\", \"mitre_technique_id\": \"T1059.001\"}"
+  },
+  {
+    "source_id": "edr-01",
+    "vendor": "CrowdStrike",
+    "raw_payload": "{\"event_type\": \"FAILED_LOGIN_BURST\", \"user_id\": \"usr-admin\", \"host_id\": \"host-srv-01\", \"ip\": \"192.168.1.105\", \"mitre_tactic\": \"CREDENTIAL_ACCESS\", \"mitre_technique_id\": \"T1110\"}"
+  }
+]
