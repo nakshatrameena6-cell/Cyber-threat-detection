@@ -1,0 +1,30 @@
+risk_tiers:
+  tier_0:
+    name: "ALERT_ONLY"
+    max_risk_score: 0.30
+    require_human_review: false
+    allowed_actions:
+      - "tag_siem_event"
+      - "send_slack_notification"
+      - "send_email"
+
+  tier_1:
+    name: "HUMAN_REVIEW"
+    max_risk_score: 0.70
+    require_human_review: true
+    allowed_actions:
+      - "create_jira_ticket"
+      - "enrich_ip_reputation"
+      - "gather_host_forensics"
+
+  tier_2:
+    name: "CONTAINMENT_PROPOSAL"
+    max_risk_score: 1.00
+    require_human_review: true # Enforced MVP safety: mandatory human review
+    allowed_actions:
+      - "propose_ip_block"
+      - "propose_host_isolation"
+      - "propose_user_suspension"
+
+safety_overrides:
+  allow_autonomous_containment: false # HARD SAFETY GUARD: Autonomous containment disabled in MVP

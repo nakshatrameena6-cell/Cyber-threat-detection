@@ -1,0 +1,31 @@
+system:
+  name: "AI Threat Detection & Response System"
+  version: "0.1.0"
+  environment: "development"
+  debug: true
+
+ingestion:
+  deduplication_window_seconds: 300
+  batch_size: 100
+  max_queue_depth: 10000
+
+detection:
+  ml_confidence_threshold: 0.60
+  enable_shadow_mode: true
+  active_ruleset_version: "v1.0.0"
+
+scoring:
+  default_asset_criticality: 1.0
+  severity_weights:
+    LOW: 0.25
+    MEDIUM: 0.50
+    HIGH: 0.75
+    CRITICAL: 1.00
+
+audit:
+  storage_path: "data/audit_logs.jsonl"
+  require_synchronous_write: true
+
+safety:
+  kill_switch_file: "config/kill_switch.yaml"
+  max_actions_per_asset_per_hour: 5
