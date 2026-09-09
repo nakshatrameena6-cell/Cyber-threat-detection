@@ -308,6 +308,29 @@ body {
     color: var(--primary-cyan);
 }
 
+/* Stream Button */
+.stream-box {
+    margin-bottom: 12px;
+}
+
+.stream-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--primary-cyan), var(--primary-blue));
+    color: var(--bg-dark);
+    font-weight: 800;
+    font-size: 0.85rem;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stream-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.4);
+}
+
 /* Simulator Panel */
 .simulator-box {
     display: flex;
@@ -318,6 +341,7 @@ body {
 .sim-help {
     font-size: 0.8rem;
     color: var(--text-muted);
+    margin-top: 4px;
 }
 
 .sim-buttons {
@@ -443,7 +467,7 @@ body {
     padding: 24px !important;
 }
 
-/* Badges & Actions */
+/* Badges & Indicators */
 .badge {
     display: inline-block;
     padding: 4px 8px;
@@ -455,6 +479,9 @@ body {
 .badge-HIGH, .badge-CRITICAL { background: rgba(255, 71, 87, 0.2); color: var(--accent-red); }
 .badge-MEDIUM { background: rgba(255, 165, 2, 0.2); color: var(--accent-amber); }
 .badge-LOW { background: rgba(46, 213, 115, 0.2); color: var(--accent-green); }
+
+.badge-abnormal { background: rgba(255, 71, 87, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
+.badge-normal { background: rgba(46, 213, 115, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
 
 .tier-badge {
     font-family: var(--font-mono);
@@ -473,6 +500,18 @@ body {
     gap: 6px;
     font-family: var(--font-mono);
     font-weight: 700;
+}
+
+.evidence-btn {
+    background: rgba(0, 242, 254, 0.1);
+    color: var(--primary-cyan);
+    border: 1px solid var(--primary-cyan);
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 4px;
 }
 
 .action-btn-approve {
@@ -528,6 +567,65 @@ body {
     border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-box {
+    background: var(--panel-bg);
+    border: 1px solid var(--primary-cyan);
+    border-radius: 16px;
+    max-width: 540px;
+    width: 90%;
+    padding: 24px;
+    box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.modal-header h3 {
+    color: var(--primary-cyan);
+    font-size: 1.1rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.modal-body {
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.evidence-tag-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid var(--primary-cyan);
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 4px;
 }
 
 @keyframes pulse {

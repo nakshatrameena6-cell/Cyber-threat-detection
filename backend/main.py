@@ -12,6 +12,7 @@ from backend.models.response import ResponseRecord, ResponseActionType, ActionSt
 from backend.models.audit import AuditLogEntry
 
 from backend.detection.normalizer import EventNormalizer
+from backend.detection.behavioral_engine import BehavioralFeatureEngine, BehavioralVector
 from backend.detection.rules_engine import RulesEngine
 from backend.detection.ml_detector import MLAnomalyDetector
 from backend.detection.risk_calculator import RiskCalculator
@@ -23,9 +24,9 @@ from backend.audit.logger import AuditLogger
 from backend.rbac import RBACManager, require_role_permission
 
 app = FastAPI(
-    title="SentinelAI - Cyber Threat Detection & Safe Response System",
-    version="1.0.0",
-    description="Spec-Driven AI Threat Detection, Composite Risk Scoring, Tiered Decision Engine, Safe Response Execution, Verification & Rollback."
+    title="Suraksha AI - Cyber Threat Detection & Safe Response System",
+    version="2.0.0",
+    description="Suraksha AI: Behavioral Stream Telemetry, Composite Risk Scoring, Tiered Decision Engine, Safe Response Execution, Verification & Rollback."
 )
 
 app.add_middleware(
@@ -36,17 +37,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Instantiate Pipeline Singletons
+# Pipeline Singletons
 ml_detector = MLAnomalyDetector()
+behavioral_engine = BehavioralFeatureEngine()
 incident_manager = IncidentManager()
 response_executor = ResponseExecutor()
 audit_logger = AuditLogger()
 
 
-# Schema models for requests
 class IngestResponse(BaseModel):
     normalized_event: NormalizedEvent
     threat_detected: bool
+    is_duplicate: bool = False
+    is_anomalous: bool = False
+    behavioral_evidence: List[str] = []
     incident: Optional[Incident] = None
     response_record: Optional[ResponseRecord] = None
     message: str
@@ -64,51 +68,76 @@ class RollbackRequest(BaseModel):
 
 def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str = "SYSTEM") -> IngestResponse:
     """
-    Executes the 9-stage pipeline:
-    Input Logs -> Normalize -> Detect Threat -> Calculate Risk -> Create Incident -> Decide Response -> Execute Safe Action -> Verify -> Audit
+    Executes the 9-stage Suraksha AI pipeline:
+    Input Logs -> Deduplicate & Normalize -> Extract Behavioral Features -> Detect Threat (Rules + ML) -> Calculate Risk -> Create Incident -> Decide Response -> Execute Safe Action -> Verify & Audit
     """
-    # 1. Normalize
-    norm_evt = EventNormalizer.normalize(raw_dict)
+    # 1. Normalize & Deduplicate
+    norm_evt, is_dup = EventNormalizer.normalize(raw_dict)
     
+    if is_dup:
+        audit_logger.log(
+            actor=actor, role=role, action_category="INGESTION",
+            description=f"Duplicate event hash detected for '{norm_evt.event_type}' from {norm_evt.source_ip}. Skipped.",
+            target_resource=norm_evt.event_id
+        )
+        return IngestResponse(
+            normalized_event=norm_evt,
+            threat_detected=False,
+            is_duplicate=True,
+            is_anomalous=False,
+            behavioral_evidence=["Duplicate telemetry event ignored"],
+            incident=None,
+            response_record=None,
+            message="Event ignored: Duplicate event in sliding window."
+        )
+
     audit_logger.log(
         actor=actor, role=role, action_category="INGESTION",
-        description=f"Ingested and normalized event '{norm_evt.event_type}' from {norm_evt.source_ip}",
+        description=f"Ingested event '{norm_evt.event_type}' from {norm_evt.source_ip}",
         target_resource=norm_evt.event_id,
         metadata={"source_ip": norm_evt.source_ip, "user_id": norm_evt.user_id}
     )
 
-    # 2. Hybrid Threat Detection (Rules + ML)
+    # 2. Behavioral Feature Extraction
+    vec, evidence = behavioral_engine.update_and_extract(norm_evt)
+
+    # 3. Hybrid Threat Detection (Rules + ML Behavioral Anomaly)
     threat_cat, rule_sev, rule_conf, rule_reason = RulesEngine.evaluate(norm_evt)
-    ml_score = ml_detector.predict_anomaly_score(norm_evt)
+    ml_score = ml_detector.predict_anomaly_score(norm_evt, vec)
+    is_anomalous = (ml_score >= 0.50)
 
     audit_logger.log(
         actor="DETECTION_ENGINE", role="SYSTEM", action_category="DETECTION",
-        description=f"Evaluated rules & ML anomaly score ({ml_score}). Threat Category: {threat_cat.value}",
+        description=f"Behavioral evaluation score: {ml_score}. Threat Category: {threat_cat.value}",
         target_resource=norm_evt.event_id,
         metadata={"threat_category": threat_cat.value, "rule_severity": rule_sev.value, "ml_score": ml_score}
     )
 
-    # If benign, return early
+    # If benign and low anomaly score, return early
     if threat_cat == "None / Benign" and ml_score < 0.65:
         return IngestResponse(
             normalized_event=norm_evt,
             threat_detected=False,
+            is_duplicate=False,
+            is_anomalous=is_anomalous,
+            behavioral_evidence=evidence,
             incident=None,
             response_record=None,
-            message="Event processed: Benign traffic."
+            message="Event processed: Normal traffic."
         )
 
-    # 3. Calculate Composite Risk & Confidence
+    # 4. Calculate Composite Risk & Confidence
     risk_score, confidence_score, rec_action_str = RiskCalculator.calculate(
-        norm_evt, threat_cat, rule_sev, rule_conf, ml_score
+        norm_evt, threat_cat, rule_sev, rule_conf, ml_score, vec, evidence
     )
 
-    # 4. Decide Response Tier
+    # 5. Decide Response Tier
     tier, initial_action_status, action_type, decision_reason = DecisionEngine.evaluate_tier(
         risk_score, confidence_score, rec_action_str
     )
 
-    # 5. Create Incident
+    # 6. Create Incident with Behavioral Evidence
+    full_details = f"{rule_reason} (ML Score: {ml_score}). {decision_reason}"
     incident = incident_manager.create_incident(
         event_id=norm_evt.event_id,
         threat_category=threat_cat,
@@ -118,16 +147,18 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
         source_ip=norm_evt.source_ip,
         user_id=norm_evt.user_id,
         asset_id=norm_evt.asset_id,
-        details=f"{rule_reason} (ML Score: {ml_score}). {decision_reason}",
+        details=full_details,
         recommended_action=action_type.value,
-        decision_tier=tier.value
+        decision_tier=tier.value,
+        is_anomalous=is_anomalous,
+        behavioral_evidence=evidence
     )
 
     audit_logger.log(
         actor="INCIDENT_ENGINE", role="SYSTEM", action_category="INCIDENT",
         description=f"Created incident {incident.incident_id} (Risk: {risk_score}, Tier: {tier.value})",
         target_resource=incident.incident_id,
-        metadata={"risk_score": risk_score, "tier": tier.value}
+        metadata={"risk_score": risk_score, "tier": tier.value, "evidence": evidence}
     )
 
     # Determine target resource for response action
@@ -139,7 +170,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
 
     response_rec = None
 
-    # 6. Execute Safe Action if APPROVED automatically (Tier C & Kill Switch OFF)
+    # 7. Execute Safe Action if APPROVED automatically (Tier C & Kill Switch OFF)
     if initial_action_status == ActionStatus.APPROVED:
         response_rec = response_executor.execute_action(
             incident_id=incident.incident_id,
@@ -158,7 +189,6 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
             metadata={"verification": response_rec.verification_status.value, "target": target_res}
         )
     else:
-        # Action is pending human approval (Tier B or Kill Switch override) or Alert Only
         audit_logger.log(
             actor="DECISION_ENGINE", role="SYSTEM", action_category="DECISION",
             description=f"Incident {incident.incident_id} queued with status '{initial_action_status.value}'. Reason: {decision_reason}",
@@ -169,6 +199,9 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
     return IngestResponse(
         normalized_event=norm_evt,
         threat_detected=True,
+        is_duplicate=False,
+        is_anomalous=is_anomalous,
+        behavioral_evidence=evidence,
         incident=incident,
         response_record=response_rec,
         message=f"Threat processed: Incident {incident.incident_id} created."
@@ -183,6 +216,25 @@ def ingest_telemetry(
     user_info: dict = Depends(lambda: {"user_id": "api_user", "role": "ANALYST"})
 ):
     return process_telemetry_pipeline(raw_event.model_dump(), actor=user_info["user_id"], role=user_info["role"])
+
+
+@app.post("/api/telemetry/ingest-batch", response_model=List[IngestResponse])
+def ingest_telemetry_batch(
+    raw_events: List[RawLogEvent],
+    user_info: dict = Depends(lambda: {"user_id": "stream_ingest", "role": "ANALYST"})
+):
+    """
+    Batch ingestion endpoint for telemetry stream files or sequential log arrays.
+    Sorts out-of-order timestamps and processes events sequentially through deduplication and behavioral engine.
+    """
+    raw_list = [e.model_dump() for e in raw_events]
+    batch_results = EventNormalizer.normalize_batch(raw_list)
+
+    responses = []
+    for norm_evt, is_dup in batch_results:
+        res = process_telemetry_pipeline(norm_evt.model_dump(), actor=user_info["user_id"], role=user_info["role"])
+        responses.append(res)
+    return responses
 
 
 @app.get("/api/incidents", response_model=List[Incident])
@@ -220,7 +272,6 @@ def approve_and_execute_response(
         )
         return {"message": f"Incident {incident_id} response DENIED and marked FALSE_POSITIVE."}
 
-    # Resolve action type & target
     try:
         act_type = ResponseActionType(inc.recommended_action)
     except ValueError:
@@ -232,7 +283,6 @@ def approve_and_execute_response(
     elif act_type == ResponseActionType.ISOLATE_ENDPOINT:
         target = inc.asset_id
 
-    # Execute action safely
     rec = response_executor.execute_action(
         incident_id=incident_id,
         action_type=act_type,
@@ -320,9 +370,6 @@ def get_system_state():
 
 @app.post("/api/simulator/inject-attack")
 def inject_simulated_attack(attack_type: str = "BRUTE_FORCE"):
-    """
-    Injects a pre-packaged cyber attack event into the pipeline.
-    """
     attacks = {
         "BRUTE_FORCE": {
             "raw_id": f"SIM-BF-{os.urandom(2).hex()}",
@@ -391,6 +438,27 @@ def inject_simulated_attack(attack_type: str = "BRUTE_FORCE"):
         raise HTTPException(status_code=400, detail=f"Unknown attack type '{attack_type}'. Available: {list(attacks.keys())}")
 
     return process_telemetry_pipeline(raw, actor="ATTACK_SIMULATOR", role="ADMIN")
+
+
+@app.post("/api/simulator/inject-stream")
+def inject_telemetry_stream():
+    """
+    Simulates reading and ingesting the realistic stream dataset from data/sample_telemetry.json
+    """
+    data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "sample_telemetry.json")
+    if not os.path.exists(data_path):
+        raise HTTPException(status_code=404, detail="Sample dataset sample_telemetry.json not found")
+
+    with open(data_path, "r", encoding="utf-8") as f:
+        events = json.load(f)
+
+    batch_results = EventNormalizer.normalize_batch(events)
+    responses = []
+    for norm_evt, is_dup in batch_results:
+        res = process_telemetry_pipeline(norm_evt.model_dump(), actor="STREAM_SIMULATOR", role="ADMIN")
+        responses.append(res)
+
+    return {"total_stream_events": len(events), "processed_responses": responses}
 
 
 # Mount static frontend directory

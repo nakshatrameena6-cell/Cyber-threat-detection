@@ -1,6 +1,7 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from backend.models.events import NormalizedEvent, AssetCriticality
 from backend.models.incidents import Severity, ThreatCategory
+from backend.detection.behavioral_engine import BehavioralVector
 
 class RiskCalculator:
     SEVERITY_WEIGHTS = {
@@ -23,13 +24,19 @@ class RiskCalculator:
         threat_cat: ThreatCategory,
         rule_severity: Severity,
         rule_confidence: float,
-        ml_score: float
+        ml_score: float,
+        vector: BehavioralVector = None,
+        evidence: List[str] = None
     ) -> Tuple[float, float, str]:
         """
         Calculates (RiskScore, ConfidenceScore, RecommendedAction)
-        RiskScore = min(100.0, (RuleWeight * 0.5 + MLScore * 50) * AssetMultiplier)
+        RiskScore = min(100.0, (RuleWeight * 0.55 + MLScore * 45) * AssetMultiplier)
+        Safety Constraint: High ML score alone without rule match cannot trigger automated execution.
         """
         if threat_cat == ThreatCategory.NONE:
+            if ml_score >= 0.75:
+                # Behavioral anomaly detected without rule match -> Moderate Risk (Tier B Human Approval)
+                return (55.0, round(ml_score * 0.7, 2), "ALERT_ONLY")
             return (5.0, 0.95, "ALERT_ONLY")
 
         base_sev_weight = cls.SEVERITY_WEIGHTS.get(rule_severity, 20.0)
@@ -37,6 +44,12 @@ class RiskCalculator:
 
         # Composite risk formula
         raw_risk = (base_sev_weight * 0.55) + (ml_score * 45.0)
+
+        # Boost risk if behavioral vector shows extreme activity
+        if vector:
+            if vector.failed_login_count >= 5.0 or vector.data_transfer_volume_mb >= 500.0:
+                raw_risk += 10.0
+
         adjusted_risk = round(min(100.0, raw_risk * mult), 1)
 
         # Confidence calculation

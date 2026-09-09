@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SentinelAI - Threat Detection & Safe Response System</title>
+    <title>Suraksha AI - Threat Detection & Safe Response System</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,8 +22,8 @@
             <div class="brand">
                 <i class="fa-solid fa-shield-halved brand-icon"></i>
                 <div class="brand-text">
-                    <h1>Sentinel<span class="highlight">AI</span></h1>
-                    <p class="subtitle">Autonomous Cyber Threat Detection & Response Engine</p>
+                    <h1>Suraksha <span class="highlight">AI</span></h1>
+                    <p class="subtitle">Autonomous Behavioral Threat Detection & Response Engine (Phase 2)</p>
                 </div>
             </div>
 
@@ -46,23 +46,23 @@
 
         <!-- Pipeline Execution Visualizer -->
         <section class="pipeline-section">
-            <h3 class="section-title"><i class="fa-solid fa-diagram-project"></i> 9-Stage Spec-Driven Pipeline Flow</h3>
+            <h3 class="section-title"><i class="fa-solid fa-diagram-project"></i> 9-Stage Spec-Driven Stream Pipeline</h3>
             <div class="pipeline-track">
                 <div class="pipe-node active" id="node-1"><div class="node-num">1</div><span>Ingest</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-2"><div class="node-num">2</div><span>Normalize</span></div>
+                <div class="pipe-node" id="node-2"><div class="node-num">2</div><span>Deduplicate</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-3"><div class="node-num">3</div><span>Detect Threat</span></div>
+                <div class="pipe-node" id="node-3"><div class="node-num">3</div><span>Behavior Engine</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-4"><div class="node-num">4</div><span>Calculate Risk</span></div>
+                <div class="pipe-node" id="node-4"><div class="node-num">4</div><span>ML Anomaly Score</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-5"><div class="node-num">5</div><span>Create Incident</span></div>
+                <div class="pipe-node" id="node-5"><div class="node-num">5</div><span>Composite Risk</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-6"><div class="node-num">6</div><span>Decide Response</span></div>
+                <div class="pipe-node" id="node-6"><div class="node-num">6</div><span>Incident Evidence</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-7"><div class="node-num">7</div><span>Execute Safe Action</span></div>
+                <div class="pipe-node" id="node-7"><div class="node-num">7</div><span>Decide Response</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-8"><div class="node-num">8</div><span>Verify State</span></div>
+                <div class="pipe-node" id="node-8"><div class="node-num">8</div><span>Safe Action</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
                 <div class="pipe-node" id="node-9"><div class="node-num">9</div><span>Audit Log</span></div>
             </div>
@@ -103,14 +103,22 @@
         <!-- Main Dashboard Content Grid -->
         <div class="dashboard-grid">
 
-            <!-- Left Panel: Cyber Attack Simulator & Manual Telemetry -->
+            <!-- Left Panel: Stream Ingestion & Attack Simulator -->
             <aside class="panel left-panel">
                 <div class="panel-header">
-                    <h3><i class="fa-solid fa-crosshairs"></i> Attack Simulator & Ingestion</h3>
+                    <h3><i class="fa-solid fa-stream"></i> Stream Ingestion & Simulator</h3>
+                </div>
+
+                <!-- Batch Telemetry Stream Trigger -->
+                <div class="stream-box">
+                    <button class="stream-btn" onclick="injectTelemetryStream()">
+                        <i class="fa-solid fa-file-import"></i> INGEST SAMPLE TELEMETRY STREAM
+                    </button>
+                    <p class="sim-help">Ingests realistic multi-event stream (`data/sample_telemetry.json`) with out-of-order & duplicate handling.</p>
                 </div>
 
                 <div class="simulator-box">
-                    <p class="sim-help">Click any threat vector below to inject live attack telemetry into the SDD pipeline:</p>
+                    <p class="sim-help">Inject individual threat vectors:</p>
                     <div class="sim-buttons">
                         <button class="sim-btn btn-bf" onclick="injectAttack('BRUTE_FORCE')">
                             <i class="fa-solid fa-key"></i> Brute Force Login
@@ -163,16 +171,16 @@
                             <thead>
                                 <tr>
                                     <th>Incident ID</th>
+                                    <th>Behavior Status</th>
                                     <th>Threat Category</th>
                                     <th>Target Source</th>
                                     <th>Risk / Conf</th>
                                     <th>Tier</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
+                                    <th>Evidence & Action</th>
                                 </tr>
                             </thead>
                             <tbody id="incidentsTableBody">
-                                <tr><td colspan="7" class="empty-td">No incidents recorded. Inject an attack above!</td></tr>
+                                <tr><td colspan="7" class="empty-td">No incidents recorded. Ingest stream or inject attack!</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -234,6 +242,19 @@
                     </div>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- Evidence Modal -->
+    <div class="modal-overlay" id="evidenceModal" onclick="closeEvidenceModal(event)">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-brain"></i> Behavioral Evidence Analysis</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalEvidenceContent">
+                Loading evidence...
+            </div>
         </div>
     </div>
 

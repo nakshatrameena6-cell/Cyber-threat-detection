@@ -14,7 +14,7 @@ def test_normalizer_valid_raw():
         "payload_metric": 5.0,
         "details": "5 failed logins"
     }
-    norm = EventNormalizer.normalize(raw)
+    norm, is_dup = EventNormalizer.normalize(raw)
     assert norm.event_id == "RAW-101"
     assert norm.source_ip == "192.168.1.100"
     assert norm.event_type == EventType.LOGIN_FAILED
@@ -27,7 +27,7 @@ def test_normalizer_defaults_and_fallback():
         "user_id": "anon",
         "event_type": "UNKNOWN_EVT"
     }
-    norm = EventNormalizer.normalize(raw)
+    norm, is_dup = EventNormalizer.normalize(raw)
     assert norm.event_id.startswith("EVT-")
     assert norm.event_type == EventType.CUSTOM
     assert norm.asset_criticality == AssetCriticality.MEDIUM

@@ -1,6 +1,28 @@
 [
   {
-    "raw_id": "RAW-001",
+    "raw_id": "STREAM-NORM-001",
+    "timestamp": "2026-09-09T09:00:15Z",
+    "source_ip": "10.0.1.22",
+    "user_id": "john_employee",
+    "event_type": "AUTH_SUCCESS",
+    "asset_id": "workstation-101",
+    "asset_criticality": "LOW",
+    "payload_metric": 1.0,
+    "details": "Standard user morning authentication during normal business hours"
+  },
+  {
+    "raw_id": "STREAM-NORM-002",
+    "timestamp": "2026-09-09T09:05:00Z",
+    "source_ip": "10.0.1.22",
+    "user_id": "john_employee",
+    "event_type": "BYTES_OUT",
+    "asset_id": "intranet-portal",
+    "asset_criticality": "LOW",
+    "payload_metric": 12.5,
+    "details": "Routine document download (12.5 MB)"
+  },
+  {
+    "raw_id": "STREAM-BF-001",
     "timestamp": "2026-09-09T03:15:00Z",
     "source_ip": "198.51.100.45",
     "user_id": "alice_dev",
@@ -11,7 +33,18 @@
     "details": "6 consecutive failed login attempts within 30 seconds"
   },
   {
-    "raw_id": "RAW-002",
+    "raw_id": "STREAM-BF-DUP-001",
+    "timestamp": "2026-09-09T03:15:10Z",
+    "source_ip": "198.51.100.45",
+    "user_id": "alice_dev",
+    "event_type": "LOGIN_FAILED",
+    "asset_id": "auth-server-01",
+    "asset_criticality": "HIGH",
+    "payload_metric": 6.0,
+    "details": "6 consecutive failed login attempts within 30 seconds"
+  },
+  {
+    "raw_id": "STREAM-SL-001",
     "timestamp": "2026-09-09T03:18:20Z",
     "source_ip": "203.0.113.88",
     "user_id": "bob_analyst",
@@ -19,10 +52,10 @@
     "asset_id": "vpn-gateway",
     "asset_criticality": "MEDIUM",
     "payload_metric": 1.0,
-    "details": "Login from unknown country IP at 03:18 AM local time"
+    "details": "Login attempt from unknown country IP at 03:18 AM UTC off-hours"
   },
   {
-    "raw_id": "RAW-003",
+    "raw_id": "STREAM-PE-001",
     "timestamp": "2026-09-09T04:02:11Z",
     "source_ip": "10.0.4.12",
     "user_id": "service_acc",
@@ -33,7 +66,7 @@
     "details": "Service account attempted sudo su to root without authorization"
   },
   {
-    "raw_id": "RAW-004",
+    "raw_id": "STREAM-LM-001",
     "timestamp": "2026-09-09T04:30:00Z",
     "source_ip": "10.0.4.15",
     "user_id": "attacker_host",
@@ -44,7 +77,7 @@
     "details": "Port scan detected targeting SMB/RDP across 45 internal hosts"
   },
   {
-    "raw_id": "RAW-005",
+    "raw_id": "STREAM-C2-001",
     "timestamp": "2026-09-09T05:00:00Z",
     "source_ip": "10.0.2.88",
     "user_id": "workstation-22",
@@ -55,7 +88,7 @@
     "details": "HTTP beaconing every 10 seconds to dynamic DNS domain evil-c2.net"
   },
   {
-    "raw_id": "RAW-006",
+    "raw_id": "STREAM-EX-001",
     "timestamp": "2026-09-09T05:22:10Z",
     "source_ip": "10.0.1.50",
     "user_id": "charlie_admin",
@@ -66,14 +99,14 @@
     "details": "Outbound transfer of 850 MB customer database archive to external IP"
   },
   {
-    "raw_id": "RAW-007",
-    "timestamp": "2026-09-09T06:00:00Z",
+    "raw_id": "STREAM-OOO-001",
+    "timestamp": "2026-09-09T02:00:00Z",
     "source_ip": "10.0.1.10",
     "user_id": "dave_user",
     "event_type": "AUTH_SUCCESS",
     "asset_id": "web-portal",
     "asset_criticality": "LOW",
     "payload_metric": 1.0,
-    "details": "Normal user authentication success during regular business hours"
+    "details": "Out-of-order early morning authentication event"
   }
 ]

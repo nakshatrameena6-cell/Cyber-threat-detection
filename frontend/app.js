@@ -1,5 +1,7 @@
 const API_BASE = ""; // Relative path to FastAPI server
 
+let incidentsCache = [];
+
 document.addEventListener("DOMContentLoaded", () => {
     startClock();
     loadDashboardState();
@@ -121,6 +123,23 @@ function updateKillSwitchUI(isActive) {
     }
 }
 
+// Inject Batch Telemetry Stream File
+async function injectTelemetryStream() {
+    triggerPipelineGlow();
+    try {
+        const res = await fetch(`${API_BASE}/api/simulator/inject-stream`, { method: "POST" });
+        const data = await res.json();
+        alert(`Successfully ingested ${data.total_stream_events} stream events through deduplication & behavioral pipeline!`);
+        setTimeout(() => {
+            loadDashboardState();
+            loadIncidents();
+            loadResponses();
+        }, 600);
+    } catch (e) {
+        alert("Error ingesting telemetry stream: " + e);
+    }
+}
+
 // Inject Attack Simulation
 async function injectAttack(attackType) {
     triggerPipelineGlow();
@@ -134,7 +153,7 @@ async function injectAttack(attackType) {
             loadDashboardState();
             loadIncidents();
             loadResponses();
-        }, 800);
+        }, 600);
     } catch (e) {
         alert("Error injecting attack: " + e);
     }
@@ -145,12 +164,13 @@ async function loadIncidents() {
     try {
         const res = await fetch(`${API_BASE}/api/incidents`);
         const incidents = await res.json();
+        incidentsCache = incidents;
         
         document.getElementById("incCount").innerText = incidents.length;
         const tbody = document.getElementById("incidentsTableBody");
 
         if (incidents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-td">No incidents recorded. Inject an attack above!</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-td">No incidents recorded. Ingest stream or inject attack!</td></tr>';
             return;
         }
 
@@ -168,15 +188,22 @@ async function loadIncidents() {
                 `;
             }
 
+            const behaviorBadge = inc.is_anomalous
+                ? `<span class="badge badge-abnormal"><i class="fa-solid fa-triangle-exclamation"></i> ABNORMAL</span>`
+                : `<span class="badge badge-normal"><i class="fa-solid fa-circle-check"></i> NORMAL</span>`;
+
             html += `
                 <tr>
                     <td><strong>${inc.incident_id}</strong></td>
+                    <td>${behaviorBadge}</td>
                     <td><span class="badge badge-${inc.severity}">${inc.threat_category}</span></td>
                     <td><code>${inc.source_ip}</code></td>
                     <td><span class="risk-pill">${inc.risk_score} <small>(${Math.round(inc.confidence_score*100)}%)</small></span></td>
                     <td><span class="tier-badge tier-${inc.decision_tier}">${inc.decision_tier}</span></td>
-                    <td><code>${inc.status}</code></td>
-                    <td>${actionBtn}</td>
+                    <td>
+                        <button class="evidence-btn" onclick="showEvidenceModal('${inc.incident_id}')"><i class="fa-solid fa-eye"></i> Evidence</button>
+                        ${actionBtn}
+                    </td>
                 </tr>
             `;
         });
@@ -184,6 +211,39 @@ async function loadIncidents() {
     } catch (e) {
         console.error("Error loading incidents:", e);
     }
+}
+
+// Show Evidence Modal
+function showEvidenceModal(incidentId) {
+    const inc = incidentsCache.find(i => i.incident_id === incidentId);
+    if (!inc) return;
+
+    const modalContent = document.getElementById("modalEvidenceContent");
+    let evidenceHtml = `
+        <p style="margin-bottom: 12px;"><strong>Incident ID:</strong> ${inc.incident_id} (<strong>${inc.threat_category}</strong>)</p>
+        <p style="margin-bottom: 12px;"><strong>Risk Score:</strong> ${inc.risk_score} / 100 | <strong>Confidence:</strong> ${Math.round(inc.confidence_score*100)}%</p>
+        <p style="margin-bottom: 12px;"><strong>Rule Details:</strong> ${inc.details}</p>
+        <h4 style="color: var(--primary-cyan); margin-top: 16px; margin-bottom: 10px;">Behavioral Evidence Tags:</h4>
+    `;
+
+    if (inc.behavioral_evidence && inc.behavioral_evidence.length > 0) {
+        inc.behavioral_evidence.forEach(tag => {
+            evidenceHtml += `<div class="evidence-tag-item"><i class="fa-solid fa-tag text-cyan"></i> ${tag}</div>`;
+        });
+    } else {
+        evidenceHtml += `<p class="text-muted">Standard telemetry baseline.</p>`;
+    }
+
+    modalContent.innerHTML = evidenceHtml;
+    document.getElementById("evidenceModal").classList.add("active");
+}
+
+function closeModal() {
+    document.getElementById("evidenceModal").classList.remove("active");
+}
+
+function closeEvidenceModal(e) {
+    if (e.target.id === "evidenceModal") closeModal();
 }
 
 // Approve / Deny Incident Response Action
@@ -196,7 +256,7 @@ async function approveIncident(incidentId, approved) {
                 "X-User-Role": "ANALYST",
                 "X-User-Id": "analyst_ui"
             },
-            body: JSON.stringify({ approved: approved, reason: "Analyst dashboard manual action" })
+            body: JSON.stringify({ approved: approved, reason: "Suraksha AI Analyst manual review" })
         });
         const data = await res.json();
         loadDashboardState();

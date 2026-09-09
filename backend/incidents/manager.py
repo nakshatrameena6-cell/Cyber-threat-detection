@@ -19,7 +19,9 @@ class IncidentManager:
         asset_id: str,
         details: str,
         recommended_action: str,
-        decision_tier: str
+        decision_tier: str,
+        is_anomalous: bool = True,
+        behavioral_evidence: Optional[List[str]] = None
     ) -> Incident:
         inc_id = f"INC-{uuid.uuid4().hex[:8].upper()}"
         incident = Incident(
@@ -37,7 +39,9 @@ class IncidentManager:
             created_at=datetime.now(timezone.utc).isoformat(),
             recommended_action=recommended_action,
             decision_tier=decision_tier,
-            action_executed=False
+            action_executed=False,
+            is_anomalous=is_anomalous,
+            behavioral_evidence=behavioral_evidence or []
         )
         self._incidents[inc_id] = incident
         return incident

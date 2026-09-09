@@ -41,3 +41,5 @@ class Incident(BaseModel):
     decision_tier: str
     action_executed: bool = False
     assigned_to: Optional[str] = None
+    is_anomalous: bool = True
+    behavioral_evidence: List[str] = []

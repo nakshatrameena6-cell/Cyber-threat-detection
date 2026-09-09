@@ -13,7 +13,7 @@ def test_risk_calculator_scoring():
         "asset_criticality": "HIGH",
         "payload_metric": 950.0
     }
-    norm = EventNormalizer.normalize(raw_high)
+    norm, _ = EventNormalizer.normalize(raw_high)
     risk, conf, action = RiskCalculator.calculate(
         event=norm,
         threat_cat=ThreatCategory.UNUSUAL_DATA_TRANSFER,
@@ -34,7 +34,7 @@ def test_risk_calculator_low_asset():
         "asset_criticality": "LOW",
         "payload_metric": 3.0
     }
-    norm = EventNormalizer.normalize(raw_low)
+    norm, _ = EventNormalizer.normalize(raw_low)
     risk, conf, action = RiskCalculator.calculate(
         event=norm,
         threat_cat=ThreatCategory.BRUTE_FORCE,
