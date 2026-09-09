@@ -1,63 +1,68 @@
 # System Architecture (ARCHITECTURE.md)
 
-## Pipeline Overview
+## System: Suraksha AI (Phase 2 Pipeline)
 
 ```mermaid
 graph TD
-    A[Raw Telemetry Ingestion] --> B[Event Normalization]
-    B --> C[Hybrid Threat Detection]
-    C --> C1[Deterministic Rules Engine]
-    C --> C2[ML Anomaly Detector]
-    C1 --> D[Composite Risk Calculator]
-    C2 --> D
-    D --> E[Incident Life-cycle Manager]
-    E --> F[Tiered Decision Engine]
-    F -->|Tier A: Risk < 40| G[Log Alert / Info]
-    F -->|Tier B: 40 <= Risk <= 75| H[Request Human Approval]
-    F -->|Tier C: Risk > 75 & Conf >= 0.75| I{Kill Switch Check}
-    I -->|Kill Switch OFF| J[Safe Action Executor]
-    I -->|Kill Switch ON| H
-    J --> K[Post-Action Verifier]
-    K --> L[Audit Trail Logger]
-    H -->|Human Approves| J
-    H -->|Human Denies| L
-    J -->|Rollback Requested| M[Action Rollback Handler]
-    M --> L
+    A[Raw Telemetry Ingestion / Stream API] --> B[Deduplication & Normalizer]
+    B --> C[Behavioral Feature Engine]
+    C --> D[Hybrid Detection Engine]
+    D --> D1[Deterministic Rules Engine]
+    D --> D2[ML Behavioral Anomaly Detector]
+    D1 --> E[Composite Risk & Evidence Calculator]
+    D2 --> E
+    E --> F[Incident Life-cycle Manager]
+    F --> G[Tiered Decision Engine]
+    G -->|Tier A: Risk < 40| H[Log Alert / Info]
+    G -->|Tier B: 40 <= Risk <= 75| I[Request Human Approval]
+    G -->|Tier C: Risk > 75 & Conf >= 0.75| J{Kill Switch Check}
+    J -->|Kill Switch OFF| K[Safe Action Executor]
+    J -->|Kill Switch ON| I
+    K --> L[Post-Action Verifier]
+    L --> M[Audit Trail Logger]
+    I -->|Human Approves| K
+    I -->|Human Denies| M
+    K -->|Rollback Requested| N[Action Rollback Handler]
+    N --> M
 ```
 
 ---
 
 ## Component Specifications
 
-### 1. Ingestion & Normalizer (`backend/detection/normalizer.py`)
-Standardizes raw syslog, JSON, and network logs into `NormalizedEvent`:
-- `event_id`: Unique UUID4 string.
-- `timestamp`: Standard UTC ISO-8601 string.
-- `source_ip`: IPv4 / IPv6 string.
-- `user_id`: Target user handle or system account.
-- `event_type`: e.g. `LOGIN_FAILED`, `AUTH_SUCCESS`, `SUDO_EXEC`, `HTTP_REQUEST`, `BYTES_OUT`.
-- `asset_id`: Targeted asset name or host.
-- `asset_criticality`: High (1.5x multiplier), Medium (1.2x), Low (1.0x).
-- `payload_metric`: Numeric metric (bytes transferred, attempt counts, beacon intervals).
+### 1. Ingestion, Deduplication & Normalizer (`backend/detection/normalizer.py`)
+- Standardizes syslog, JSON files, and network stream arrays into `NormalizedEvent`.
+- **Deduplication Engine**: Hash-based sliding window filtering out identical event hashes within a 60-second window.
+- **Out-of-Order Sorting**: Sorts sequential event streams by ISO timestamp before ingestion.
 
-### 2. Detection Engine (`backend/detection/`)
+### 2. Behavioral Feature Engine (`backend/detection/behavioral_engine.py`)
+Maintains rolling state windows per `user_id` and `source_ip`:
+- `failed_login_count`: Rolling 5-minute counter.
+- `login_frequency`: Logins per minute.
+- `off_hours_flag`: Boolean (1.0 if access between 18:00 - 08:00 UTC).
+- `unique_destinations`: Count of unique internal targets accessed.
+- `privilege_change_events`: Count of sudo/admin attempts.
+- `data_transfer_volume_mb`: Cumulative outbound transfer volume.
+- `connection_frequency`: Rate of network/C2 requests.
+
+### 3. Detection Engine (`backend/detection/`)
 - **`rules_engine.py`**: Evaluates 6 categories (`SUSPICIOUS_LOGIN`, `BRUTE_FORCE`, `PRIVILEGE_ESCALATION`, `LATERAL_MOVEMENT`, `C2_ACTIVITY`, `UNUSUAL_DATA_TRANSFER`).
-- **`ml_detector.py`**: Uses an IsolationForest model trained on multivariate numeric vectors (`[failed_logins, data_out_mb, port_entropy, time_of_day]`) to output an Anomaly Score $\in [0.0, 1.0]$.
+- **`ml_detector.py`**: Uses an IsolationForest model trained on 6D behavioral vectors `[failed_logins, data_mb, unique_dests, conn_freq, off_hours, priv_changes]` to output an Anomaly Score $\in [0.0, 1.0]$ alongside behavioral evidence tags.
 
-### 3. Risk & Decision Engine (`backend/detection/risk_calculator.py`, `backend/response/decision_engine.py`)
-$$ \text{Risk Score} = \min\left(100, (\text{RuleSeverity} \times 0.6 + \text{MLScore} \times 40) \times \text{AssetCriticality} \right) $$
-$$ \text{Confidence Score} = \frac{\text{RuleConfidence} + \text{MLScore}}{2} $$
+### 4. Risk & Decision Engine (`backend/detection/risk_calculator.py`, `backend/response/decision_engine.py`)
+$$ \text{Risk Score} = \min\left(100, (\text{RuleSeverity} \times 0.55 + \text{MLAnomalyScore} \times 45) \times \text{AssetCriticality} \right) $$
+$$ \text{Confidence Score} = \frac{\text{RuleConfidence} \times 0.6 + \text{MLScore} \times 0.4}{1.0} $$
 
 ### Decision Tiering Matrix
 - **Tier A (Info/Low)**: Risk $< 40$. Log alert only.
-- **Tier B (Medium)**: $40 \le \text{Risk} \le 75$. Requires Human Approval via Dashboard before execution.
+- **Tier B (Medium)**: $40 \le \text{Risk} \le 75$ OR high ML score without rule match. Requires Human Approval.
 - **Tier C (High/Critical)**: Risk $> 75$ AND Confidence $\ge 0.75$. Auto-executes safe simulated response UNLESS Kill Switch is Active.
 
-### 4. Safe Executor, Verifier & Rollback (`backend/response/executor.py`, `verifier.py`)
+### 5. Safe Executor, Verifier & Rollback (`backend/response/executor.py`, `verifier.py`)
 - `BLOCK_IP`: Simulates dynamic IP block. Verification checks active simulated firewall table. Reversible via `UNBLOCK_IP`.
 - `SUSPEND_SESSION`: Invalidates target token state. Reversible via `REACTIVATE_SESSION`.
 - `ISOLATE_ENDPOINT`: Sets endpoint network flag to Isolated. Reversible via `REJOIN_NETWORK`.
 
-### 5. Audit & RBAC (`backend/audit/logger.py`, `backend/rbac.py`)
+### 6. Audit & RBAC (`backend/audit/logger.py`, `backend/rbac.py`)
 - Tamper-evident append-only JSON structure.
 - Roles: `ADMIN`, `ANALYST`, `AUDITOR`.
