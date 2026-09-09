@@ -1,0 +1,79 @@
+[
+  {
+    "raw_id": "RAW-001",
+    "timestamp": "2026-09-09T03:15:00Z",
+    "source_ip": "198.51.100.45",
+    "user_id": "alice_dev",
+    "event_type": "LOGIN_FAILED",
+    "asset_id": "auth-server-01",
+    "asset_criticality": "HIGH",
+    "payload_metric": 6.0,
+    "details": "6 consecutive failed login attempts within 30 seconds"
+  },
+  {
+    "raw_id": "RAW-002",
+    "timestamp": "2026-09-09T03:18:20Z",
+    "source_ip": "203.0.113.88",
+    "user_id": "bob_analyst",
+    "event_type": "SUSPICIOUS_LOGIN",
+    "asset_id": "vpn-gateway",
+    "asset_criticality": "MEDIUM",
+    "payload_metric": 1.0,
+    "details": "Login from unknown country IP at 03:18 AM local time"
+  },
+  {
+    "raw_id": "RAW-003",
+    "timestamp": "2026-09-09T04:02:11Z",
+    "source_ip": "10.0.4.12",
+    "user_id": "service_acc",
+    "event_type": "SUDO_EXEC",
+    "asset_id": "db-primary",
+    "asset_criticality": "HIGH",
+    "payload_metric": 1.0,
+    "details": "Service account attempted sudo su to root without authorization"
+  },
+  {
+    "raw_id": "RAW-004",
+    "timestamp": "2026-09-09T04:30:00Z",
+    "source_ip": "10.0.4.15",
+    "user_id": "attacker_host",
+    "event_type": "PORT_SCAN",
+    "asset_id": "internal-subnet-b",
+    "asset_criticality": "HIGH",
+    "payload_metric": 45.0,
+    "details": "Port scan detected targeting SMB/RDP across 45 internal hosts"
+  },
+  {
+    "raw_id": "RAW-005",
+    "timestamp": "2026-09-09T05:00:00Z",
+    "source_ip": "10.0.2.88",
+    "user_id": "workstation-22",
+    "event_type": "C2_BEACON",
+    "asset_id": "workstation-22",
+    "asset_criticality": "LOW",
+    "payload_metric": 10.0,
+    "details": "HTTP beaconing every 10 seconds to dynamic DNS domain evil-c2.net"
+  },
+  {
+    "raw_id": "RAW-006",
+    "timestamp": "2026-09-09T05:22:10Z",
+    "source_ip": "10.0.1.50",
+    "user_id": "charlie_admin",
+    "event_type": "BYTES_OUT",
+    "asset_id": "file-vault-01",
+    "asset_criticality": "HIGH",
+    "payload_metric": 850.0,
+    "details": "Outbound transfer of 850 MB customer database archive to external IP"
+  },
+  {
+    "raw_id": "RAW-007",
+    "timestamp": "2026-09-09T06:00:00Z",
+    "source_ip": "10.0.1.10",
+    "user_id": "dave_user",
+    "event_type": "AUTH_SUCCESS",
+    "asset_id": "web-portal",
+    "asset_criticality": "LOW",
+    "payload_metric": 1.0,
+    "details": "Normal user authentication success during regular business hours"
+  }
+]
