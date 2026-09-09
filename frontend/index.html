@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SentinelAI - Threat Detection & Safe Response System</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navbar -->
+        <header class="top-nav">
+            <div class="brand">
+                <i class="fa-solid fa-shield-halved brand-icon"></i>
+                <div class="brand-text">
+                    <h1>Sentinel<span class="highlight">AI</span></h1>
+                    <p class="subtitle">Autonomous Cyber Threat Detection & Response Engine</p>
+                </div>
+            </div>
+
+            <!-- Global Emergency Kill Switch Widget -->
+            <div class="kill-switch-box" id="killSwitchBox">
+                <div class="ks-info">
+                    <span class="ks-label"><i class="fa-solid fa-triangle-exclamation"></i> EMERGENCY KILL SWITCH</span>
+                    <span class="ks-status-badge" id="ksStatusBadge">INACTIVE</span>
+                </div>
+                <button class="ks-btn" id="ksToggleBtn" onclick="toggleKillSwitch()">
+                    <i class="fa-solid fa-power-off"></i> <span id="ksBtnText">ENGAGE KILL SWITCH</span>
+                </button>
+            </div>
+
+            <div class="user-profile">
+                <span class="role-badge"><i class="fa-solid fa-user-shield"></i> ROLE: <strong id="userRole">ADMIN</strong></span>
+                <span class="system-time" id="clock">00:00:00 UTC</span>
+            </div>
+        </header>
+
+        <!-- Pipeline Execution Visualizer -->
+        <section class="pipeline-section">
+            <h3 class="section-title"><i class="fa-solid fa-diagram-project"></i> 9-Stage Spec-Driven Pipeline Flow</h3>
+            <div class="pipeline-track">
+                <div class="pipe-node active" id="node-1"><div class="node-num">1</div><span>Ingest</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-2"><div class="node-num">2</div><span>Normalize</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-3"><div class="node-num">3</div><span>Detect Threat</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-4"><div class="node-num">4</div><span>Calculate Risk</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-5"><div class="node-num">5</div><span>Create Incident</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-6"><div class="node-num">6</div><span>Decide Response</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-7"><div class="node-num">7</div><span>Execute Safe Action</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-8"><div class="node-num">8</div><span>Verify State</span></div>
+                <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+                <div class="pipe-node" id="node-9"><div class="node-num">9</div><span>Audit Log</span></div>
+            </div>
+        </section>
+
+        <!-- Live Metrics Cards -->
+        <section class="metrics-grid">
+            <div class="metric-card card-purple">
+                <div class="card-icon"><i class="fa-solid fa-bug"></i></div>
+                <div class="card-content">
+                    <span class="card-val" id="metricIncidents">0</span>
+                    <span class="card-label">Total Incidents</span>
+                </div>
+            </div>
+            <div class="metric-card card-red">
+                <div class="card-icon"><i class="fa-solid fa-ban"></i></div>
+                <div class="card-content">
+                    <span class="card-val" id="metricBlockedIPs">0</span>
+                    <span class="card-label">Blocked IPs</span>
+                </div>
+            </div>
+            <div class="metric-card card-amber">
+                <div class="card-icon"><i class="fa-solid fa-user-slash"></i></div>
+                <div class="card-content">
+                    <span class="card-val" id="metricSuspendedUsers">0</span>
+                    <span class="card-label">Suspended Sessions</span>
+                </div>
+            </div>
+            <div class="metric-card card-cyan">
+                <div class="card-icon"><i class="fa-solid fa-network-wired"></i></div>
+                <div class="card-content">
+                    <span class="card-val" id="metricIsolatedHosts">0</span>
+                    <span class="card-label">Isolated Hosts</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard Content Grid -->
+        <div class="dashboard-grid">
+
+            <!-- Left Panel: Cyber Attack Simulator & Manual Telemetry -->
+            <aside class="panel left-panel">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-crosshairs"></i> Attack Simulator & Ingestion</h3>
+                </div>
+
+                <div class="simulator-box">
+                    <p class="sim-help">Click any threat vector below to inject live attack telemetry into the SDD pipeline:</p>
+                    <div class="sim-buttons">
+                        <button class="sim-btn btn-bf" onclick="injectAttack('BRUTE_FORCE')">
+                            <i class="fa-solid fa-key"></i> Brute Force Login
+                        </button>
+                        <button class="sim-btn btn-sl" onclick="injectAttack('SUSPICIOUS_LOGIN')">
+                            <i class="fa-solid fa-user-lock"></i> Suspicious Geo Login
+                        </button>
+                        <button class="sim-btn btn-pe" onclick="injectAttack('PRIVILEGE_ESCALATION')">
+                            <i class="fa-solid fa-user-ninja"></i> Privilege Escalation
+                        </button>
+                        <button class="sim-btn btn-lm" onclick="injectAttack('LATERAL_MOVEMENT')">
+                            <i class="fa-solid fa-sitemap"></i> Lateral Port Scan
+                        </button>
+                        <button class="sim-btn btn-c2" onclick="injectAttack('C2_BEACON')">
+                            <i class="fa-solid fa-radio"></i> C2 Malware Beacon
+                        </button>
+                        <button class="sim-btn btn-ex" onclick="injectAttack('UNUSUAL_DATA_TRANSFER')">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Data Exfiltration
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Security State Storage Summary -->
+                <div class="state-summary-box">
+                    <h4><i class="fa-solid fa-server"></i> Active Simulated Enforcements</h4>
+                    <div class="state-list" id="activeEnforcementsList">
+                        <span class="empty-text">No active blocks or isolations.</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Right Panel: Incidents Queue, Actions & Audit Tabs -->
+            <main class="panel right-panel">
+                <div class="tab-nav">
+                    <button class="tab-btn active" onclick="switchTab('incidentsTab')">
+                        <i class="fa-solid fa-list-check"></i> Incidents Queue (<span id="incCount">0</span>)
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('responseTab')">
+                        <i class="fa-solid fa-bolt"></i> Executed Actions (<span id="actCount">0</span>)
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('auditTab')">
+                        <i class="fa-solid fa-file-signature"></i> Audit Trail
+                    </button>
+                </div>
+
+                <!-- Tab 1: Incidents Queue -->
+                <div class="tab-content active" id="incidentsTab">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Incident ID</th>
+                                    <th>Threat Category</th>
+                                    <th>Target Source</th>
+                                    <th>Risk / Conf</th>
+                                    <th>Tier</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="incidentsTableBody">
+                                <tr><td colspan="7" class="empty-td">No incidents recorded. Inject an attack above!</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Response Actions & Rollback -->
+                <div class="tab-content" id="responseTab">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Action ID</th>
+                                    <th>Type</th>
+                                    <th>Target</th>
+                                    <th>Executed By</th>
+                                    <th>Verification</th>
+                                    <th>Status</th>
+                                    <th>Rollback</th>
+                                </tr>
+                            </thead>
+                            <tbody id="responsesTableBody">
+                                <tr><td colspan="7" class="empty-td">No response actions executed yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Filterable Audit Trail -->
+                <div class="tab-content" id="auditTab">
+                    <div class="audit-filter-bar">
+                        <select id="auditCategoryFilter" onchange="loadAuditLogs()">
+                            <option value="">All Audit Categories</option>
+                            <option value="INGESTION">Ingestion</option>
+                            <option value="DETECTION">Detection</option>
+                            <option value="DECISION">Decision</option>
+                            <option value="EXECUTION">Execution</option>
+                            <option value="APPROVAL">Approval</option>
+                            <option value="ROLLBACK">Rollback</option>
+                            <option value="KILL_SWITCH">Kill Switch</option>
+                        </select>
+                        <button class="refresh-btn" onclick="loadAuditLogs()"><i class="fa-solid fa-rotate"></i> Refresh Audit</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Actor</th>
+                                    <th>Role</th>
+                                    <th>Category</th>
+                                    <th>Description</th>
+                                    <th>Resource</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditTableBody">
+                                <tr><td colspan="6" class="empty-td">Loading audit log...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
