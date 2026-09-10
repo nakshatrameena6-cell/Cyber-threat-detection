@@ -6,6 +6,7 @@ from backend.models.response import (
 )
 from backend.response.verifier import ResponseVerifier
 from backend.response.safety_gates import SafetyGatesEvaluator
+from backend.rbac import RBACManager
 
 class ResponseExecutor:
     def __init__(self):
@@ -46,10 +47,10 @@ class ResponseExecutor:
         actor_role: str = "ADMIN",
         is_auto_execution: bool = True,
         details: str = ""
-    ) -> Tuple[bool, ResponseRecord, str]:
+    ) -> ResponseRecord:
         """
         Evaluates safety gates, captures pre-state, executes safe action, and verifies result.
-        Returns (success: bool, ResponseRecord, message: str)
+        Returns ResponseRecord (with record.success and record.gate_message).
         """
         # Evaluate 10 Pre-Execution Safety Gates
         gate_passed, gate_name, gate_reason = SafetyGatesEvaluator.evaluate_gates(
@@ -77,10 +78,12 @@ class ResponseExecutor:
                 execution_time=now_str,
                 is_reversible=False,
                 rolled_back=False,
-                details=f"Execution BLOCKED by {gate_name}: {gate_reason}"
+                details=f"Execution BLOCKED by {gate_name}: {gate_reason}",
+                success=False,
+                gate_message=f"Blocked by {gate_name}: {gate_reason}"
             )
             self.records[action_id] = record
-            return (False, record, f"Blocked by {gate_name}: {gate_reason}")
+            return record
 
         # Capture Pre-State for Rollback
         self.capture_pre_state(action_id, target, action_type)
@@ -110,7 +113,9 @@ class ResponseExecutor:
             execution_time=now_str,
             is_reversible=(action_type != ResponseActionType.ALERT_ONLY),
             rolled_back=False,
-            details=f"{details} - {msg}"
+            details=f"{details} - {msg}",
+            success=True,
+            gate_message="All 10 safety gates passed"
         )
 
         # Independent Verification Check
@@ -120,7 +125,7 @@ class ResponseExecutor:
         record.details += f" | {ver_msg}"
 
         self.records[action_id] = record
-        return (True, record, msg)
+        return record
 
     def rollback_action(self, action_id: str, actor: str = "ADMIN", actor_role: str = "ADMIN") -> Tuple[bool, str, Optional[ResponseRecord]]:
         # RBAC Check

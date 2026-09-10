@@ -41,3 +41,5 @@ class ResponseRecord(BaseModel):
     is_reversible: bool = True
     rolled_back: bool = False
     details: str
+    success: bool = True
+    gate_message: str = ""

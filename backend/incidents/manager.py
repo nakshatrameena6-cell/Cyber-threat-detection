@@ -22,10 +22,12 @@ class IncidentManager:
         decision_tier: str,
         is_anomalous: bool = True,
         behavioral_evidence: Optional[List[str]] = None,
-        why_evidence: Optional[List[str]] = None
+        why_evidence: Optional[List[str]] = None,
+        event_timestamp: Optional[str] = None
     ) -> Incident:
         inc_id = f"INC-{uuid.uuid4().hex[:8].upper()}"
         now_str = datetime.now(timezone.utc).isoformat()
+        ts_str = event_timestamp or now_str
         
         incident = Incident(
             incident_id=inc_id,
@@ -43,8 +45,8 @@ class IncidentManager:
             details=details,
             status=IncidentStatus.NEW,
             created_at=now_str,
-            first_seen=now_str,
-            last_seen=now_str,
+            first_seen=ts_str,
+            last_seen=ts_str,
             recommended_action=recommended_action,
             decision_tier=decision_tier,
             action_executed=False,
@@ -53,7 +55,7 @@ class IncidentManager:
             why_evidence=why_evidence or [],
             related_events=[event_id],
             timeline=[{
-                "timestamp": now_str,
+                "timestamp": ts_str,
                 "event_id": event_id,
                 "event_type": "INCIDENT_CREATED",
                 "description": f"Incident created for threat '{threat_category.value}' (Risk: {risk_score})",

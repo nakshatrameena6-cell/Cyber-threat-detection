@@ -118,8 +118,12 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
         metadata={"threat_category": threat_cat.value, "rule_severity": rule_sev.value, "ml_score": ml_score}
     )
 
-    # If benign and low anomaly score, return early
-    if threat_cat == "None / Benign" and ml_score < 0.65:
+    # Check existing open incidents for correlation
+    active_incidents = incident_manager.list_incidents()
+    existing_incident = correlation_engine.find_correlatable_incident(norm_evt, active_incidents)
+
+    # If benign and low anomaly score AND no correlated active incident exists, return early
+    if threat_cat == "None / Benign" and ml_score < 0.65 and not existing_incident:
         return IngestResponse(
             normalized_event=norm_evt,
             threat_detected=False,
@@ -143,9 +147,6 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
     )
 
     # 6. Incident Correlation Engine (Merge into existing open incident or create new)
-    active_incidents = incident_manager.list_incidents()
-    existing_incident = correlation_engine.find_correlatable_incident(norm_evt, active_incidents)
-
     if existing_incident:
         incident = correlation_engine.merge_event_into_incident(
             incident=existing_incident,
@@ -177,7 +178,8 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
             decision_tier=tier.value,
             is_anomalous=is_anomalous,
             behavioral_evidence=evidence,
-            why_evidence=why_bullets
+            why_evidence=why_bullets,
+            event_timestamp=norm_evt.timestamp
         )
         audit_logger.log(
             actor="INCIDENT_ENGINE", role="SYSTEM", action_category="INCIDENT",
@@ -196,7 +198,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
 
     # 7. Execute Safe Response via 10 Safety Gates (if auto-execution is policy candidate and Kill Switch OFF)
     if policy_status == ActionStatus.APPROVED and auto_allowed:
-        success, response_rec, exec_msg = response_executor.execute_action(
+        response_rec = response_executor.execute_action(
             incident_id=incident.incident_id,
             action_type=action_type,
             target=target_res,
@@ -207,7 +209,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
             details=f"Automated Tier C policy execution for Incident {incident.incident_id}"
         )
 
-        if success:
+        if response_rec.success:
             incident_manager.mark_action_executed(incident.incident_id)
             incident.verification_status = response_rec.verification_status.value
             audit_logger.log(
@@ -218,7 +220,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
         else:
             audit_logger.log(
                 actor="SAFETY_GATES", role="SYSTEM", action_category="DECISION",
-                description=f"Execution blocked for Incident {incident.incident_id}: {exec_msg}",
+                description=f"Execution blocked for Incident {incident.incident_id}: {response_rec.gate_message}",
                 target_resource=incident.incident_id
             )
     else:
@@ -340,7 +342,7 @@ def approve_and_execute_response(
         target = inc.asset_id
 
     # Execute through 10 Safety Gates
-    success, rec, msg = response_executor.execute_action(
+    rec = response_executor.execute_action(
         incident_id=incident_id,
         action_type=act_type,
         target=target,
@@ -351,13 +353,13 @@ def approve_and_execute_response(
         details=f"Manual Analyst Approval by {user_info['user_id']}: {req.reason}"
     )
 
-    if not success:
+    if not rec.success:
         audit_logger.log(
             actor=user_info["user_id"], role=user_info["role"], action_category="APPROVAL",
-            description=f"Analyst approved action for Incident {incident_id}, BUT safety gate blocked execution: {msg}",
+            description=f"Analyst approved action for Incident {incident_id}, BUT safety gate blocked execution: {rec.gate_message}",
             target_resource=incident_id
         )
-        raise HTTPException(status_code=400, detail=f"Response blocked by safety gate: {msg}")
+        raise HTTPException(status_code=400, detail=f"Response blocked by safety gate: {rec.gate_message}")
 
     incident_manager.mark_action_executed(incident_id)
     inc.verification_status = rec.verification_status.value
@@ -381,7 +383,6 @@ def rollback_response_action(
     if not success:
         raise HTTPException(status_code=400, detail=msg)
 
-    # Update related incident rollback status
     if rec and rec.incident_id:
         inc = incident_manager.get_incident(rec.incident_id)
         if inc:
