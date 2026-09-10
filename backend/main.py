@@ -17,16 +17,18 @@ from backend.detection.rules_engine import RulesEngine
 from backend.detection.ml_detector import MLAnomalyDetector
 from backend.detection.risk_calculator import RiskCalculator
 from backend.incidents.manager import IncidentManager
+from backend.incidents.correlation import IncidentCorrelationEngine
 from backend.response.kill_switch import EmergencyKillSwitch
 from backend.response.decision_engine import DecisionEngine
+from backend.response.policy_engine import ResponsePolicyEngine
 from backend.response.executor import ResponseExecutor
 from backend.audit.logger import AuditLogger
 from backend.rbac import RBACManager, require_role_permission
 
 app = FastAPI(
-    title="Suraksha AI - Cyber Threat Detection & Safe Response System",
-    version="2.0.0",
-    description="Suraksha AI: Behavioral Stream Telemetry, Composite Risk Scoring, Tiered Decision Engine, Safe Response Execution, Verification & Rollback."
+    title="Suraksha AI - Risk, Incident Correlation & Safe Response System",
+    version="3.0.0",
+    description="Suraksha AI Phase 3: Multi-Event Incident Correlation, Transparent Risk Explanations, Response Policy Engine, 10 Safety Gates, Verification & Timeline UI."
 )
 
 app.add_middleware(
@@ -40,6 +42,7 @@ app.add_middleware(
 # Pipeline Singletons
 ml_detector = MLAnomalyDetector()
 behavioral_engine = BehavioralFeatureEngine()
+correlation_engine = IncidentCorrelationEngine()
 incident_manager = IncidentManager()
 response_executor = ResponseExecutor()
 audit_logger = AuditLogger()
@@ -51,6 +54,7 @@ class IngestResponse(BaseModel):
     is_duplicate: bool = False
     is_anomalous: bool = False
     behavioral_evidence: List[str] = []
+    why_evidence: List[str] = []
     incident: Optional[Incident] = None
     response_record: Optional[ResponseRecord] = None
     message: str
@@ -68,8 +72,8 @@ class RollbackRequest(BaseModel):
 
 def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str = "SYSTEM") -> IngestResponse:
     """
-    Executes the 9-stage Suraksha AI pipeline:
-    Input Logs -> Deduplicate & Normalize -> Extract Behavioral Features -> Detect Threat (Rules + ML) -> Calculate Risk -> Create Incident -> Decide Response -> Execute Safe Action -> Verify & Audit
+    Executes the 9-stage Phase 3 Suraksha AI pipeline:
+    Telemetry -> Deduplication & Normalization -> Behavioral Feature Extraction -> Rules + ML Anomaly Detection -> Composite Risk & "Why" Evidence -> Incident Correlation -> Response Policy & 10 Safety Gates -> Simulated Response & Verification -> Audit Trail
     """
     # 1. Normalize & Deduplicate
     norm_evt, is_dup = EventNormalizer.normalize(raw_dict)
@@ -86,6 +90,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
             is_duplicate=True,
             is_anomalous=False,
             behavioral_evidence=["Duplicate telemetry event ignored"],
+            why_evidence=["Duplicate event in 60s sliding window"],
             incident=None,
             response_record=None,
             message="Event ignored: Duplicate event in sliding window."
@@ -121,45 +126,64 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
             is_duplicate=False,
             is_anomalous=is_anomalous,
             behavioral_evidence=evidence,
+            why_evidence=["Normal operational telemetry"],
             incident=None,
             response_record=None,
             message="Event processed: Normal traffic."
         )
 
-    # 4. Calculate Composite Risk & Confidence
-    risk_score, confidence_score, rec_action_str = RiskCalculator.calculate(
+    # 4. Composite Risk & Transparent "Why" Evidence Calculation
+    risk_score, confidence_score, rec_action_str, why_bullets = RiskCalculator.calculate(
         norm_evt, threat_cat, rule_sev, rule_conf, ml_score, vec, evidence
     )
 
-    # 5. Decide Response Tier
-    tier, initial_action_status, action_type, decision_reason = DecisionEngine.evaluate_tier(
-        risk_score, confidence_score, rec_action_str
+    # 5. Response Policy Evaluation
+    tier, policy_status, action_type, policy_reason, auto_allowed = ResponsePolicyEngine.evaluate_policy(
+        threat_cat, risk_score, confidence_score, rec_action_str
     )
 
-    # 6. Create Incident with Behavioral Evidence
-    full_details = f"{rule_reason} (ML Score: {ml_score}). {decision_reason}"
-    incident = incident_manager.create_incident(
-        event_id=norm_evt.event_id,
-        threat_category=threat_cat,
-        severity=rule_sev,
-        risk_score=risk_score,
-        confidence_score=confidence_score,
-        source_ip=norm_evt.source_ip,
-        user_id=norm_evt.user_id,
-        asset_id=norm_evt.asset_id,
-        details=full_details,
-        recommended_action=action_type.value,
-        decision_tier=tier.value,
-        is_anomalous=is_anomalous,
-        behavioral_evidence=evidence
-    )
+    # 6. Incident Correlation Engine (Merge into existing open incident or create new)
+    active_incidents = incident_manager.list_incidents()
+    existing_incident = correlation_engine.find_correlatable_incident(norm_evt, active_incidents)
 
-    audit_logger.log(
-        actor="INCIDENT_ENGINE", role="SYSTEM", action_category="INCIDENT",
-        description=f"Created incident {incident.incident_id} (Risk: {risk_score}, Tier: {tier.value})",
-        target_resource=incident.incident_id,
-        metadata={"risk_score": risk_score, "tier": tier.value, "evidence": evidence}
-    )
+    if existing_incident:
+        incident = correlation_engine.merge_event_into_incident(
+            incident=existing_incident,
+            event=norm_evt,
+            threat_cat=threat_cat,
+            new_risk=risk_score,
+            new_confidence=confidence_score,
+            evidence=evidence,
+            why_bullets=why_bullets
+        )
+        audit_logger.log(
+            actor="CORRELATION_ENGINE", role="SYSTEM", action_category="CORRELATION",
+            description=f"Correlated event {norm_evt.event_id} into incident {incident.incident_id}. Escalated Risk: {incident.risk_score}",
+            target_resource=incident.incident_id
+        )
+    else:
+        full_details = f"{rule_reason} (ML Score: {ml_score}). {policy_reason}"
+        incident = incident_manager.create_incident(
+            event_id=norm_evt.event_id,
+            threat_category=threat_cat,
+            severity=rule_sev,
+            risk_score=risk_score,
+            confidence_score=confidence_score,
+            source_ip=norm_evt.source_ip,
+            user_id=norm_evt.user_id,
+            asset_id=norm_evt.asset_id,
+            details=full_details,
+            recommended_action=action_type.value,
+            decision_tier=tier.value,
+            is_anomalous=is_anomalous,
+            behavioral_evidence=evidence,
+            why_evidence=why_bullets
+        )
+        audit_logger.log(
+            actor="INCIDENT_ENGINE", role="SYSTEM", action_category="INCIDENT",
+            description=f"Created incident {incident.incident_id} (Risk: {risk_score}, Tier: {tier.value})",
+            target_resource=incident.incident_id
+        )
 
     # Determine target resource for response action
     target_res = norm_evt.source_ip
@@ -170,30 +194,38 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
 
     response_rec = None
 
-    # 7. Execute Safe Action if APPROVED automatically (Tier C & Kill Switch OFF)
-    if initial_action_status == ActionStatus.APPROVED:
-        response_rec = response_executor.execute_action(
+    # 7. Execute Safe Response via 10 Safety Gates (if auto-execution is policy candidate and Kill Switch OFF)
+    if policy_status == ActionStatus.APPROVED and auto_allowed:
+        success, response_rec, exec_msg = response_executor.execute_action(
             incident_id=incident.incident_id,
             action_type=action_type,
             target=target_res,
             tier=tier,
             actor="AUTO_ENGINE",
-            details=f"Automated Tier C execution for Incident {incident.incident_id}"
+            actor_role="ADMIN",
+            is_auto_execution=True,
+            details=f"Automated Tier C policy execution for Incident {incident.incident_id}"
         )
-        incident_manager.mark_action_executed(incident.incident_id)
 
-        audit_logger.log(
-            actor="AUTO_ENGINE", role="SYSTEM", action_category="EXECUTION",
-            description=f"Executed automated response {action_type.value} on '{target_res}'. Verification: {response_rec.verification_status.value}",
-            target_resource=response_rec.action_id,
-            metadata={"verification": response_rec.verification_status.value, "target": target_res}
-        )
+        if success:
+            incident_manager.mark_action_executed(incident.incident_id)
+            incident.verification_status = response_rec.verification_status.value
+            audit_logger.log(
+                actor="AUTO_ENGINE", role="SYSTEM", action_category="EXECUTION",
+                description=f"Executed automated response {action_type.value} on '{target_res}'. Verification: {response_rec.verification_status.value}",
+                target_resource=response_rec.action_id
+            )
+        else:
+            audit_logger.log(
+                actor="SAFETY_GATES", role="SYSTEM", action_category="DECISION",
+                description=f"Execution blocked for Incident {incident.incident_id}: {exec_msg}",
+                target_resource=incident.incident_id
+            )
     else:
         audit_logger.log(
-            actor="DECISION_ENGINE", role="SYSTEM", action_category="DECISION",
-            description=f"Incident {incident.incident_id} queued with status '{initial_action_status.value}'. Reason: {decision_reason}",
-            target_resource=incident.incident_id,
-            metadata={"status": initial_action_status.value, "tier": tier.value}
+            actor="POLICY_ENGINE", role="SYSTEM", action_category="DECISION",
+            description=f"Incident {incident.incident_id} queued with status '{policy_status.value}'. Reason: {policy_reason}",
+            target_resource=incident.incident_id
         )
 
     return IngestResponse(
@@ -202,9 +234,10 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
         is_duplicate=False,
         is_anomalous=is_anomalous,
         behavioral_evidence=evidence,
+        why_evidence=why_bullets,
         incident=incident,
         response_record=response_rec,
-        message=f"Threat processed: Incident {incident.incident_id} created."
+        message=f"Threat processed: Incident {incident.incident_id} updated/created."
     )
 
 
@@ -223,10 +256,6 @@ def ingest_telemetry_batch(
     raw_events: List[RawLogEvent],
     user_info: dict = Depends(lambda: {"user_id": "stream_ingest", "role": "ANALYST"})
 ):
-    """
-    Batch ingestion endpoint for telemetry stream files or sequential log arrays.
-    Sorts out-of-order timestamps and processes events sequentially through deduplication and behavioral engine.
-    """
     raw_list = [e.model_dump() for e in raw_events]
     batch_results = EventNormalizer.normalize_batch(raw_list)
 
@@ -248,6 +277,33 @@ def get_incident_detail(incident_id: str):
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
     return inc
+
+
+@app.get("/api/incidents/{incident_id}/timeline")
+def get_incident_timeline(incident_id: str):
+    inc = incident_manager.get_incident(incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return {"incident_id": incident_id, "timeline": inc.timeline}
+
+
+@app.post("/api/incidents/{incident_id}/investigate")
+def mark_incident_investigating(
+    incident_id: str,
+    user_info: dict = Depends(lambda: {"user_id": "analyst_john", "role": "ANALYST"})
+):
+    try:
+        inc = incident_manager.update_status(incident_id, IncidentStatus.UNDER_INVESTIGATION, assigned_to=user_info["user_id"])
+        audit_logger.log(
+            actor=user_info["user_id"], role=user_info["role"], action_category="INCIDENT",
+            description=f"Analyst {user_info['user_id']} marked incident {incident_id} as UNDER_INVESTIGATION",
+            target_resource=incident_id
+        )
+        return {"message": f"Incident {incident_id} state updated to UNDER_INVESTIGATION", "incident": inc}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Incident not found")
 
 
 @app.post("/api/incidents/{incident_id}/approve")
@@ -283,16 +339,28 @@ def approve_and_execute_response(
     elif act_type == ResponseActionType.ISOLATE_ENDPOINT:
         target = inc.asset_id
 
-    rec = response_executor.execute_action(
+    # Execute through 10 Safety Gates
+    success, rec, msg = response_executor.execute_action(
         incident_id=incident_id,
         action_type=act_type,
         target=target,
         tier=DecisionTier(inc.decision_tier),
         actor=user_info["user_id"],
+        actor_role=user_info["role"],
+        is_auto_execution=False,
         details=f"Manual Analyst Approval by {user_info['user_id']}: {req.reason}"
     )
 
+    if not success:
+        audit_logger.log(
+            actor=user_info["user_id"], role=user_info["role"], action_category="APPROVAL",
+            description=f"Analyst approved action for Incident {incident_id}, BUT safety gate blocked execution: {msg}",
+            target_resource=incident_id
+        )
+        raise HTTPException(status_code=400, detail=f"Response blocked by safety gate: {msg}")
+
     incident_manager.mark_action_executed(incident_id)
+    inc.verification_status = rec.verification_status.value
 
     audit_logger.log(
         actor=user_info["user_id"], role=user_info["role"], action_category="APPROVAL",
@@ -309,9 +377,15 @@ def rollback_response_action(
     req: RollbackRequest,
     user_info: dict = Depends(lambda: {"user_id": "admin_alice", "role": "ADMIN"})
 ):
-    success, msg, rec = response_executor.rollback_action(action_id, actor=user_info["user_id"])
+    success, msg, rec = response_executor.rollback_action(action_id, actor=user_info["user_id"], actor_role=user_info["role"])
     if not success:
         raise HTTPException(status_code=400, detail=msg)
+
+    # Update related incident rollback status
+    if rec and rec.incident_id:
+        inc = incident_manager.get_incident(rec.incident_id)
+        if inc:
+            inc.rollback_status = "ROLLED_BACK"
 
     audit_logger.log(
         actor=user_info["user_id"], role=user_info["role"], action_category="ROLLBACK",
@@ -442,9 +516,6 @@ def inject_simulated_attack(attack_type: str = "BRUTE_FORCE"):
 
 @app.post("/api/simulator/inject-stream")
 def inject_telemetry_stream():
-    """
-    Simulates reading and ingesting the realistic stream dataset from data/sample_telemetry.json
-    """
     data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "sample_telemetry.json")
     if not os.path.exists(data_path):
         raise HTTPException(status_code=404, detail="Sample dataset sample_telemetry.json not found")

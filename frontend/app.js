@@ -129,7 +129,7 @@ async function injectTelemetryStream() {
     try {
         const res = await fetch(`${API_BASE}/api/simulator/inject-stream`, { method: "POST" });
         const data = await res.json();
-        alert(`Successfully ingested ${data.total_stream_events} stream events through deduplication & behavioral pipeline!`);
+        alert(`Successfully ingested ${data.total_stream_events} stream events through deduplication, correlation & policy pipeline!`);
         setTimeout(() => {
             loadDashboardState();
             loadIncidents();
@@ -170,7 +170,7 @@ async function loadIncidents() {
         const tbody = document.getElementById("incidentsTableBody");
 
         if (incidents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="empty-td">No incidents recorded. Ingest stream or inject attack!</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-td">No incidents recorded. Ingest stream or inject attack!</td></tr>';
             return;
         }
 
@@ -192,16 +192,25 @@ async function loadIncidents() {
                 ? `<span class="badge badge-abnormal"><i class="fa-solid fa-triangle-exclamation"></i> ABNORMAL</span>`
                 : `<span class="badge badge-normal"><i class="fa-solid fa-circle-check"></i> NORMAL</span>`;
 
+            let categoriesStr = inc.threat_category;
+            if (inc.threat_categories && inc.threat_categories.length > 1) {
+                categoriesStr = inc.threat_categories.join(", ");
+            }
+
+            const statusBadge = `<span class="tier-badge tier-${inc.status === 'NEW' ? 'TIER_C' : 'TIER_A'}">${inc.status}</span>`;
+
             html += `
                 <tr>
                     <td><strong>${inc.incident_id}</strong></td>
                     <td>${behaviorBadge}</td>
-                    <td><span class="badge badge-${inc.severity}">${inc.threat_category}</span></td>
+                    <td><span class="badge badge-${inc.severity}">${categoriesStr}</span></td>
                     <td><code>${inc.source_ip}</code></td>
                     <td><span class="risk-pill">${inc.risk_score} <small>(${Math.round(inc.confidence_score*100)}%)</small></span></td>
                     <td><span class="tier-badge tier-${inc.decision_tier}">${inc.decision_tier}</span></td>
+                    <td>${statusBadge}</td>
                     <td>
-                        <button class="evidence-btn" onclick="showEvidenceModal('${inc.incident_id}')"><i class="fa-solid fa-eye"></i> Evidence</button>
+                        <button class="evidence-btn" onclick="showEvidenceModal('${inc.incident_id}')"><i class="fa-solid fa-clock-rotate-left"></i> Timeline</button>
+                        ${inc.status === 'NEW' ? `<button class="investigate-btn" onclick="investigateIncident('${inc.incident_id}')"><i class="fa-solid fa-magnifying-glass"></i></button>` : ''}
                         ${actionBtn}
                     </td>
                 </tr>
@@ -213,26 +222,62 @@ async function loadIncidents() {
     }
 }
 
-// Show Evidence Modal
+// Mark Incident Under Investigation
+async function investigateIncident(incidentId) {
+    try {
+        const res = await fetch(`${API_BASE}/api/incidents/${incidentId}/investigate`, {
+            method: "POST",
+            headers: { "X-User-Role": "ANALYST", "X-User-Id": "analyst_ui" }
+        });
+        const data = await res.json();
+        loadIncidents();
+    } catch (e) {
+        alert("Error investigating incident: " + e);
+    }
+}
+
+// Show Evidence & Timeline Modal
 function showEvidenceModal(incidentId) {
     const inc = incidentsCache.find(i => i.incident_id === incidentId);
     if (!inc) return;
 
     const modalContent = document.getElementById("modalEvidenceContent");
-    let evidenceHtml = `
-        <p style="margin-bottom: 12px;"><strong>Incident ID:</strong> ${inc.incident_id} (<strong>${inc.threat_category}</strong>)</p>
-        <p style="margin-bottom: 12px;"><strong>Risk Score:</strong> ${inc.risk_score} / 100 | <strong>Confidence:</strong> ${Math.round(inc.confidence_score*100)}%</p>
-        <p style="margin-bottom: 12px;"><strong>Rule Details:</strong> ${inc.details}</p>
-        <h4 style="color: var(--primary-cyan); margin-top: 16px; margin-bottom: 10px;">Behavioral Evidence Tags:</h4>
-    `;
-
-    if (inc.behavioral_evidence && inc.behavioral_evidence.length > 0) {
-        inc.behavioral_evidence.forEach(tag => {
-            evidenceHtml += `<div class="evidence-tag-item"><i class="fa-solid fa-tag text-cyan"></i> ${tag}</div>`;
+    
+    let whyHtml = "";
+    if (inc.why_evidence && inc.why_evidence.length > 0) {
+        inc.why_evidence.forEach(bullet => {
+            whyHtml += `<div class="why-bullet-item"><i class="fa-solid fa-circle-info text-amber"></i> ${bullet}</div>`;
         });
     } else {
-        evidenceHtml += `<p class="text-muted">Standard telemetry baseline.</p>`;
+        whyHtml = `<p class="text-muted">No explicit risk drivers.</p>`;
     }
+
+    let timelineHtml = "";
+    if (inc.timeline && inc.timeline.length > 0) {
+        inc.timeline.forEach(step => {
+            const timeStr = step.timestamp ? step.timestamp.split("T")[1].substring(0, 8) : "";
+            timelineHtml += `
+                <div class="timeline-item">
+                    <div class="timeline-time">${timeStr} UTC</div>
+                    <div><strong>${step.event_type}</strong> - ${step.description}</div>
+                </div>
+            `;
+        });
+    } else {
+        timelineHtml = `<p class="text-muted">No timeline recorded.</p>`;
+    }
+
+    let evidenceHtml = `
+        <p style="margin-bottom: 8px;"><strong>Incident ID:</strong> ${inc.incident_id} (<strong>${inc.threat_category}</strong>)</p>
+        <p style="margin-bottom: 8px;"><strong>Correlated Events Count:</strong> ${inc.related_events ? inc.related_events.length : 1} | <strong>Status:</strong> ${inc.status}</p>
+        <p style="margin-bottom: 12px;"><strong>Risk Score:</strong> ${inc.risk_score} / 100 | <strong>Confidence:</strong> ${Math.round(inc.confidence_score*100)}%</p>
+        
+        <h4 style="color: var(--accent-amber); margin-top: 14px; margin-bottom: 8px;"><i class="fa-solid fa-list-check"></i> "Why" Risk Evidence Explanation:</h4>
+        ${whyHtml}
+
+        <h4 style="color: var(--primary-cyan); margin-top: 16px; margin-bottom: 8px;"><i class="fa-solid fa-clock-rotate-left"></i> Correlated Event Timeline:</h4>
+        ${timelineHtml}
+    `;
 
     modalContent.innerHTML = evidenceHtml;
     document.getElementById("evidenceModal").classList.add("active");

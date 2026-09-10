@@ -23,7 +23,7 @@
                 <i class="fa-solid fa-shield-halved brand-icon"></i>
                 <div class="brand-text">
                     <h1>Suraksha <span class="highlight">AI</span></h1>
-                    <p class="subtitle">Autonomous Behavioral Threat Detection & Response Engine (Phase 2)</p>
+                    <p class="subtitle">Autonomous Risk, Correlation & Safe Response Engine (Phase 3)</p>
                 </div>
             </div>
 
@@ -46,23 +46,23 @@
 
         <!-- Pipeline Execution Visualizer -->
         <section class="pipeline-section">
-            <h3 class="section-title"><i class="fa-solid fa-diagram-project"></i> 9-Stage Spec-Driven Stream Pipeline</h3>
+            <h3 class="section-title"><i class="fa-solid fa-diagram-project"></i> 9-Stage Spec-Driven Stream & Correlation Pipeline</h3>
             <div class="pipeline-track">
                 <div class="pipe-node active" id="node-1"><div class="node-num">1</div><span>Ingest</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
                 <div class="pipe-node" id="node-2"><div class="node-num">2</div><span>Deduplicate</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-3"><div class="node-num">3</div><span>Behavior Engine</span></div>
+                <div class="pipe-node" id="node-3"><div class="node-num">3</div><span>Rules + ML</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-4"><div class="node-num">4</div><span>ML Anomaly Score</span></div>
+                <div class="pipe-node" id="node-4"><div class="node-num">4</div><span>"Why" Evidence</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-5"><div class="node-num">5</div><span>Composite Risk</span></div>
+                <div class="pipe-node" id="node-5"><div class="node-num">5</div><span>Incident Correlation</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-6"><div class="node-num">6</div><span>Incident Evidence</span></div>
+                <div class="pipe-node" id="node-6"><div class="node-num">6</div><span>Policy Engine</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-7"><div class="node-num">7</div><span>Decide Response</span></div>
+                <div class="pipe-node" id="node-7"><div class="node-num">7</div><span>10 Safety Gates</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
-                <div class="pipe-node" id="node-8"><div class="node-num">8</div><span>Safe Action</span></div>
+                <div class="pipe-node" id="node-8"><div class="node-num">8</div><span>Safe Action & Verification</span></div>
                 <div class="pipe-arrow"><i class="fa-solid fa-chevron-right"></i></div>
                 <div class="pipe-node" id="node-9"><div class="node-num">9</div><span>Audit Log</span></div>
             </div>
@@ -74,7 +74,7 @@
                 <div class="card-icon"><i class="fa-solid fa-bug"></i></div>
                 <div class="card-content">
                     <span class="card-val" id="metricIncidents">0</span>
-                    <span class="card-label">Total Incidents</span>
+                    <span class="card-label">Correlated Incidents</span>
                 </div>
             </div>
             <div class="metric-card card-red">
@@ -114,7 +114,7 @@
                     <button class="stream-btn" onclick="injectTelemetryStream()">
                         <i class="fa-solid fa-file-import"></i> INGEST SAMPLE TELEMETRY STREAM
                     </button>
-                    <p class="sim-help">Ingests realistic multi-event stream (`data/sample_telemetry.json`) with out-of-order & duplicate handling.</p>
+                    <p class="sim-help">Ingests realistic multi-event stream (`data/sample_telemetry.json`) with out-of-order, duplicate & multi-event correlation handling.</p>
                 </div>
 
                 <div class="simulator-box">
@@ -154,7 +154,7 @@
             <main class="panel right-panel">
                 <div class="tab-nav">
                     <button class="tab-btn active" onclick="switchTab('incidentsTab')">
-                        <i class="fa-solid fa-list-check"></i> Incidents Queue (<span id="incCount">0</span>)
+                        <i class="fa-solid fa-list-check"></i> Correlated Incidents (<span id="incCount">0</span>)
                     </button>
                     <button class="tab-btn" onclick="switchTab('responseTab')">
                         <i class="fa-solid fa-bolt"></i> Executed Actions (<span id="actCount">0</span>)
@@ -171,16 +171,17 @@
                             <thead>
                                 <tr>
                                     <th>Incident ID</th>
-                                    <th>Behavior Status</th>
-                                    <th>Threat Category</th>
+                                    <th>Behavior</th>
+                                    <th>Threat Categories</th>
                                     <th>Target Source</th>
                                     <th>Risk / Conf</th>
                                     <th>Tier</th>
-                                    <th>Evidence & Action</th>
+                                    <th>Status</th>
+                                    <th>Actions & Timeline</th>
                                 </tr>
                             </thead>
                             <tbody id="incidentsTableBody">
-                                <tr><td colspan="7" class="empty-td">No incidents recorded. Ingest stream or inject attack!</td></tr>
+                                <tr><td colspan="8" class="empty-td">No incidents recorded. Ingest stream or inject attack!</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -215,6 +216,7 @@
                             <option value="">All Audit Categories</option>
                             <option value="INGESTION">Ingestion</option>
                             <option value="DETECTION">Detection</option>
+                            <option value="CORRELATION">Correlation</option>
                             <option value="DECISION">Decision</option>
                             <option value="EXECUTION">Execution</option>
                             <option value="APPROVAL">Approval</option>
@@ -245,11 +247,11 @@
         </div>
     </div>
 
-    <!-- Evidence Modal -->
+    <!-- Evidence & Timeline Modal -->
     <div class="modal-overlay" id="evidenceModal" onclick="closeEvidenceModal(event)">
         <div class="modal-box">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-brain"></i> Behavioral Evidence Analysis</h3>
+                <h3><i class="fa-solid fa-brain"></i> Incident Analysis & Event Timeline</h3>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body" id="modalEvidenceContent">

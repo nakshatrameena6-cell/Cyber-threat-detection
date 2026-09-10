@@ -27,28 +27,49 @@ class RiskCalculator:
         ml_score: float,
         vector: BehavioralVector = None,
         evidence: List[str] = None
-    ) -> Tuple[float, float, str]:
+    ) -> Tuple[float, float, str, List[str]]:
         """
-        Calculates (RiskScore, ConfidenceScore, RecommendedAction)
+        Calculates (RiskScore, ConfidenceScore, RecommendedAction, WhyEvidenceBullets)
         RiskScore = min(100.0, (RuleWeight * 0.55 + MLScore * 45) * AssetMultiplier)
         Safety Constraint: High ML score alone without rule match cannot trigger automated execution.
         """
+        why_bullets: List[str] = []
+
         if threat_cat == ThreatCategory.NONE:
             if ml_score >= 0.75:
-                # Behavioral anomaly detected without rule match -> Moderate Risk (Tier B Human Approval)
-                return (55.0, round(ml_score * 0.7, 2), "ALERT_ONLY")
-            return (5.0, 0.95, "ALERT_ONLY")
+                why_bullets.append(f"Behavioral anomaly score elevated ({ml_score:.2f}) without deterministic rule match")
+                return (55.0, round(ml_score * 0.7, 2), "ALERT_ONLY", why_bullets)
+            
+            why_bullets.append("Normal operational event baseline")
+            return (5.0, 0.95, "ALERT_ONLY", why_bullets)
 
         base_sev_weight = cls.SEVERITY_WEIGHTS.get(rule_severity, 20.0)
         mult = cls.ASSET_CRITICALITY_MULTIPLIER.get(event.asset_criticality, 1.0)
+
+        why_bullets.append(f"Threat category identified: {threat_cat.value} ({rule_severity.value} severity rule)")
 
         # Composite risk formula
         raw_risk = (base_sev_weight * 0.55) + (ml_score * 45.0)
 
         # Boost risk if behavioral vector shows extreme activity
         if vector:
-            if vector.failed_login_count >= 5.0 or vector.data_transfer_volume_mb >= 500.0:
+            if vector.failed_login_count >= 5.0:
                 raw_risk += 10.0
+                why_bullets.append(f"{int(vector.failed_login_count)} failed login attempts in rolling window")
+            if vector.data_transfer_volume_mb >= 500.0:
+                raw_risk += 10.0
+                why_bullets.append(f"Massive data transfer volume ({vector.data_transfer_volume_mb:.1f} MB)")
+            if vector.off_hours_flag > 0.0:
+                why_bullets.append("Off-hours access context detected")
+            if vector.privilege_change_events >= 1.0:
+                why_bullets.append(f"{int(vector.privilege_change_events)} privilege escalation (sudo) attempt(s)")
+            if vector.unique_destinations_count >= 5.0:
+                why_bullets.append(f"Internal subnet probing across {int(vector.unique_destinations_count)} targets")
+
+        if event.asset_criticality == AssetCriticality.HIGH:
+            why_bullets.append(f"Target asset '{event.asset_id}' flagged as HIGH CRITICALITY (1.5x risk multiplier)")
+        elif event.asset_criticality == AssetCriticality.MEDIUM:
+            why_bullets.append(f"Target asset '{event.asset_id}' flagged as MEDIUM CRITICALITY")
 
         adjusted_risk = round(min(100.0, raw_risk * mult), 1)
 
@@ -65,4 +86,4 @@ class RiskCalculator:
         else:
             recommended_action = "ALERT_ONLY"
 
-        return (adjusted_risk, confidence, recommended_action)
+        return (adjusted_risk, confidence, recommended_action, why_bullets)
