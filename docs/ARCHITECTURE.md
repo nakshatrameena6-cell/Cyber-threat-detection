@@ -1,6 +1,6 @@
 # System Architecture (ARCHITECTURE.md)
 
-## System: Suraksha AI (Phase 2 Pipeline)
+## System: Suraksha AI (Phase 3 Architecture)
 
 ```mermaid
 graph TD
@@ -9,60 +9,62 @@ graph TD
     C --> D[Hybrid Detection Engine]
     D --> D1[Deterministic Rules Engine]
     D --> D2[ML Behavioral Anomaly Detector]
-    D1 --> E[Composite Risk & Evidence Calculator]
+    D1 --> E[Composite Risk & "Why" Evidence Calculator]
     D2 --> E
-    E --> F[Incident Life-cycle Manager]
-    F --> G[Tiered Decision Engine]
-    G -->|Tier A: Risk < 40| H[Log Alert / Info]
-    G -->|Tier B: 40 <= Risk <= 75| I[Request Human Approval]
-    G -->|Tier C: Risk > 75 & Conf >= 0.75| J{Kill Switch Check}
-    J -->|Kill Switch OFF| K[Safe Action Executor]
-    J -->|Kill Switch ON| I
-    K --> L[Post-Action Verifier]
-    L --> M[Audit Trail Logger]
-    I -->|Human Approves| K
-    I -->|Human Denies| M
-    K -->|Rollback Requested| N[Action Rollback Handler]
-    N --> M
+    E --> F[Deterministic Incident Correlation Engine]
+    F --> G[Centralized Response Policy Engine]
+    G --> H[10 Pre-Execution Safety Gates Layer]
+    H -->|Gate 1: Auth Role Check| Gate2
+    H -->|Gate 2: Policy Rules Check| Gate3
+    H -->|Gate 3: Kill Switch Check| Gate4
+    H -->|Gate 4: Target Scope Check| Gate5
+    H -->|Gate 5: Blast Radius Check| Gate6
+    H -->|Gate 6: Audit Persistence Check| Gate7
+    H -->|Gate 7: Pre-State Capture| Gate8
+    H -->|Gate 8: Idempotency Check| Gate9
+    H -->|Gate 9: Execution Timeout Safety| Gate10
+    H -->|Gate 10: Independent Verification| J[Simulated Response Executor]
+    H -->|Any Gate Fails| I[Block Action & Queue Human Approval]
+    J --> K[Independent State Verifier]
+    K --> L[Audit Trail Logger]
+    I --> L
+    J -->|Rollback Requested| M[Action Rollback Handler]
+    M --> L
 ```
 
 ---
 
-## Component Specifications
+## Phase 3 Component Specifications
 
-### 1. Ingestion, Deduplication & Normalizer (`backend/detection/normalizer.py`)
-- Standardizes syslog, JSON files, and network stream arrays into `NormalizedEvent`.
-- **Deduplication Engine**: Hash-based sliding window filtering out identical event hashes within a 60-second window.
-- **Out-of-Order Sorting**: Sorts sequential event streams by ISO timestamp before ingestion.
+### 1. Incident Correlation Engine (`backend/incidents/correlation.py`)
+- Groups related events into unified multi-stage incidents using a 10-minute sliding window.
+- Correlation Key: matching `user_id`, `source_ip`, or `asset_id`.
+- Merges event IDs, threat categories list, aggregates behavioral evidence, re-evaluates risk score, and appends timeline events.
 
-### 2. Behavioral Feature Engine (`backend/detection/behavioral_engine.py`)
-Maintains rolling state windows per `user_id` and `source_ip`:
-- `failed_login_count`: Rolling 5-minute counter.
-- `login_frequency`: Logins per minute.
-- `off_hours_flag`: Boolean (1.0 if access between 18:00 - 08:00 UTC).
-- `unique_destinations`: Count of unique internal targets accessed.
-- `privilege_change_events`: Count of sudo/admin attempts.
-- `data_transfer_volume_mb`: Cumulative outbound transfer volume.
-- `connection_frequency`: Rate of network/C2 requests.
+### 2. Risk & "Why" Evidence Engine (`backend/detection/risk_calculator.py`)
+$$ \text{Risk Score} = \min\left(100, (\text{RuleSeverityWeight} \times 0.55 + \text{MLAnomalyScore} \times 45) \times \text{AssetCriticality} \right) $$
+- Generates human-readable evidence array (`why_evidence`) explicitly documenting the factors driving the risk score.
 
-### 3. Detection Engine (`backend/detection/`)
-- **`rules_engine.py`**: Evaluates 6 categories (`SUSPICIOUS_LOGIN`, `BRUTE_FORCE`, `PRIVILEGE_ESCALATION`, `LATERAL_MOVEMENT`, `C2_ACTIVITY`, `UNUSUAL_DATA_TRANSFER`).
-- **`ml_detector.py`**: Uses an IsolationForest model trained on 6D behavioral vectors `[failed_logins, data_mb, unique_dests, conn_freq, off_hours, priv_changes]` to output an Anomaly Score $\in [0.0, 1.0]$ alongside behavioral evidence tags.
+### 3. Response Policy Engine (`backend/response/policy_engine.py`)
+Evaluates 10-signal decision tuple:
+- `Tier A`: Candidate for auto-execution only if confidence $\ge 0.75$, policy permits, scope allowed, blast radius within limit, kill switch OFF.
+- `Tier B`: Low-risk / safely bounded auto-execution + immediate notification.
+- `Tier C`: High-impact actions (e.g. `ISOLATE_ENDPOINT`) require explicit analyst approval.
 
-### 4. Risk & Decision Engine (`backend/detection/risk_calculator.py`, `backend/response/decision_engine.py`)
-$$ \text{Risk Score} = \min\left(100, (\text{RuleSeverity} \times 0.55 + \text{MLAnomalyScore} \times 45) \times \text{AssetCriticality} \right) $$
-$$ \text{Confidence Score} = \frac{\text{RuleConfidence} \times 0.6 + \text{MLScore} \times 0.4}{1.0} $$
+### 4. 10-Gate Pre-Execution Safety Enforcement (`backend/response/safety_gates.py`)
+Enforces 10 sequential checks before executing ANY action:
+1. Authorization Role Check
+2. Response Policy Compatibility Check
+3. Emergency Kill-Switch Check
+4. Target Scope Format Validation
+5. Blast-Radius Limit Check (max 5 active blocks/isolations)
+6. Audit Persistence Pre-Check
+7. Pre-State Capture
+8. Idempotency Check (prevents redundant mutations)
+9. Execution Timeout Safety Check
+10. Independent Verification Check
 
-### Decision Tiering Matrix
-- **Tier A (Info/Low)**: Risk $< 40$. Log alert only.
-- **Tier B (Medium)**: $40 \le \text{Risk} \le 75$ OR high ML score without rule match. Requires Human Approval.
-- **Tier C (High/Critical)**: Risk $> 75$ AND Confidence $\ge 0.75$. Auto-executes safe simulated response UNLESS Kill Switch is Active.
-
-### 5. Safe Executor, Verifier & Rollback (`backend/response/executor.py`, `verifier.py`)
-- `BLOCK_IP`: Simulates dynamic IP block. Verification checks active simulated firewall table. Reversible via `UNBLOCK_IP`.
-- `SUSPEND_SESSION`: Invalidates target token state. Reversible via `REACTIVATE_SESSION`.
-- `ISOLATE_ENDPOINT`: Sets endpoint network flag to Isolated. Reversible via `REJOIN_NETWORK`.
-
-### 6. Audit & RBAC (`backend/audit/logger.py`, `backend/rbac.py`)
-- Tamper-evident append-only JSON structure.
-- Roles: `ADMIN`, `ANALYST`, `AUDITOR`.
+### 5. Strict Incident Lifecycle State Machine (`backend/incidents/manager.py`)
+Enforces valid state transitions:
+`NEW` $\rightarrow$ `UNDER_INVESTIGATION` $\rightarrow$ `MITIGATED` $\rightarrow$ `RESOLVED` / `FALSE_POSITIVE`
+Rejects invalid jumps (e.g. `RESOLVED` $\rightarrow$ `NEW`).
