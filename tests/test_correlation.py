@@ -22,7 +22,8 @@ def test_incident_correlation_same_user():
         asset_id=norm1.asset_id,
         details="Initial brute force event",
         recommended_action="BLOCK_IP",
-        decision_tier="TIER_C"
+        decision_tier="TIER_C",
+        event_timestamp=norm1.timestamp
     )
 
     # Second event for same user 2 minutes later
@@ -49,7 +50,8 @@ def test_unrelated_events_do_not_correlate():
     inc1 = mgr.create_incident(
         event_id=norm1.event_id, threat_category=ThreatCategory.BRUTE_FORCE, severity=Severity.HIGH,
         risk_score=75.0, confidence_score=0.85, source_ip=norm1.source_ip, user_id=norm1.user_id,
-        asset_id=norm1.asset_id, details="Brute force", recommended_action="BLOCK_IP", decision_tier="TIER_C"
+        asset_id=norm1.asset_id, details="Brute force", recommended_action="BLOCK_IP", decision_tier="TIER_C",
+        event_timestamp=norm1.timestamp
     )
 
     # Completely different user, IP, and asset
@@ -68,7 +70,8 @@ def test_time_window_correlation_expiry():
     mgr.create_incident(
         event_id=norm1.event_id, threat_category=ThreatCategory.BRUTE_FORCE, severity=Severity.HIGH,
         risk_score=75.0, confidence_score=0.85, source_ip=norm1.source_ip, user_id=norm1.user_id,
-        asset_id=norm1.asset_id, details="Brute force", recommended_action="BLOCK_IP", decision_tier="TIER_C"
+        asset_id=norm1.asset_id, details="Brute force", recommended_action="BLOCK_IP", decision_tier="TIER_C",
+        event_timestamp=norm1.timestamp
     )
 
     # Same user 15 minutes later (> 5 min window)
