@@ -1,4 +1,4 @@
-# SentinelAI - Autonomous Cyber Threat Detection & Safe Response System
+# Suraksha AI - Autonomous Cyber Threat Detection & Safe Response System
 
 An end-to-end, spec-driven **AI Threat Detection & Response System (MVP)** for college project demonstration.
 
@@ -65,30 +65,6 @@ Cyber-threat-detection/
 │   └── test_end_to_end.py  # Full 9-stage pipeline integration test
 └── README.md
 ```
-
----
-
-## 🚀 Quick Start Guide
-
-### 1. Prerequisites
-Ensure Python 3.10+ is installed.
-
-### 2. Run Test Suite
-Verify that all SDD requirement test cases pass:
-```bash
-python -m pytest -v
-```
-
-### 3. Launch Dashboard & API Server
-Start the FastAPI server:
-```bash
-python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Open your browser and navigate to:
-👉 **`http://localhost:8000`**
-
----
 
 ## 🎓 College Presentation Demo Guide
 
