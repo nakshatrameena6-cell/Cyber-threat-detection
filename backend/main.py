@@ -122,20 +122,43 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
     if is_dup:
         audit_logger.log(
             actor=actor, role=role, action_category="INGESTION",
-            description=f"Duplicate event hash detected for '{norm_evt.event_type.value}' from {norm_evt.source_ip}. Skipped.",
+            description=f"Duplicate event hash detected for '{norm_evt.event_type.value}' from {norm_evt.source_ip}. Suppressed from primary detection.",
             target_resource=norm_evt.event_id
         )
-        return IngestResponse(
-            normalized_event=norm_evt,
-            threat_detected=False,
-            is_duplicate=True,
-            is_anomalous=False,
-            behavioral_evidence=["Duplicate telemetry event ignored"],
-            why_evidence=["Duplicate event in 60s sliding window"],
-            incident=None,
-            response_record=None,
-            message="Event ignored: Duplicate event in sliding window."
-        )
+        active_incidents = incident_manager.list_incidents()
+        existing_incident = correlation_engine.find_correlatable_incident(norm_evt, active_incidents)
+        if existing_incident:
+            # Safely append duplicate observation to incident timeline without triggering remediation
+            correlation_engine.record_duplicate_observation(existing_incident, norm_evt)
+            incident_manager.save_incident_update(existing_incident)
+            audit_logger.log(
+                actor="CORRELATION_ENGINE", role="SYSTEM", action_category="CORRELATION",
+                description=f"Duplicate observation of event '{norm_evt.event_id}' associated with incident {existing_incident.incident_id} (count: {existing_incident.duplicate_events_count}). Zero remediation executed.",
+                target_resource=existing_incident.incident_id
+            )
+            return IngestResponse(
+                normalized_event=norm_evt,
+                threat_detected=False,
+                is_duplicate=True,
+                is_anomalous=False,
+                behavioral_evidence=[f"Duplicate telemetry event observed ({existing_incident.duplicate_events_count} total suppressed for incident)"],
+                why_evidence=["Duplicate observation associated with active incident timeline without response re-execution."],
+                incident=existing_incident,
+                response_record=None,
+                message=f"Duplicate event observed and correlated to incident {existing_incident.incident_id}."
+            )
+        else:
+            return IngestResponse(
+                normalized_event=norm_evt,
+                threat_detected=False,
+                is_duplicate=True,
+                is_anomalous=False,
+                behavioral_evidence=["Duplicate telemetry event ignored (no active incident found)"],
+                why_evidence=["Duplicate event in 60s sliding window without active incident."],
+                incident=None,
+                response_record=None,
+                message="Event ignored: Duplicate event in sliding window."
+            )
 
     audit_logger.log(
         actor=actor, role=role, action_category="INGESTION",
@@ -148,7 +171,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
     vec, evidence = behavioral_engine.update_and_extract(norm_evt)
 
     # 3. Hybrid Threat Detection (Deterministic Rules + ML Behavioral Anomaly)
-    threat_cat, rule_sev, rule_conf, rule_reason = RulesEngine.evaluate(norm_evt)
+    threat_cat, rule_sev, rule_conf, rule_reason = RulesEngine.evaluate(norm_evt, vector=vec)
     ml_score = ml_detector.predict_anomaly_score(norm_evt, vec)
     is_anomalous = (ml_score >= 0.50)
     is_anomaly_only = (threat_cat == ThreatCategory.NONE or threat_cat == "None / Benign")
@@ -395,11 +418,17 @@ def ingest_telemetry_batch(
 @app.get("/api/telemetry/stats")
 def get_telemetry_stats():
     """
-    Returns telemetry ingestion statistics loaded from SQLite.
+    Returns telemetry ingestion statistics loaded from SQLite, including Phase 6 duplicate metrics.
     """
     latest = db_manager.get_latest_telemetry_event()
+    tstats = db_manager.get_telemetry_stats()
     return {
         "total_persisted_events": db_manager.get_telemetry_count(),
+        "total_raw_events": tstats["total_raw_events"],
+        "total_unique_events": tstats["total_unique_events"],
+        "total_duplicates_suppressed": tstats["total_duplicates_suppressed"],
+        "duplicates_attached_to_incidents": tstats["duplicates_attached_to_incidents"],
+        "deduplication_rate_pct": tstats["deduplication_rate_pct"],
         "latest_event": latest,
         "database_path": get_db_path(),
         "syslog_enabled": syslog_listener.is_enabled

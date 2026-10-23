@@ -139,3 +139,28 @@ def calculate_correlation_metrics(
         "benign_unintended_incidents": benign_unintended_incidents,
         "threats_missing_incidents": threat_without_incident,
     }
+
+
+def calculate_stream_deduplication_metrics(
+    raw_total: int,
+    unique_total: int,
+    duplicates_suppressed: int,
+    duplicates_attached_to_incidents: int
+) -> Dict[str, Any]:
+    """
+    Computes metrics for the raw ingestion stream and deduplication subsystem (Requirement C & Workstream G).
+    Distinguishes raw ingestion stream metrics from unique normalized event detection metrics.
+    """
+    dedup_ratio = (duplicates_suppressed / raw_total) if raw_total > 0 else 0.0
+    incident_attach_rate = (duplicates_attached_to_incidents / duplicates_suppressed) if duplicates_suppressed > 0 else 0.0
+
+    return {
+        "raw_events_received": raw_total,
+        "unique_events_analyzed": unique_total,
+        "duplicates_suppressed": duplicates_suppressed,
+        "duplicates_attached_to_incidents": duplicates_attached_to_incidents,
+        "deduplication_rate_pct": round(dedup_ratio * 100.0, 2),
+        "incident_timeline_attachment_rate_pct": round(incident_attach_rate * 100.0, 2),
+        "alert_flooding_reduction_pct": round(dedup_ratio * 100.0, 2)
+    }
+

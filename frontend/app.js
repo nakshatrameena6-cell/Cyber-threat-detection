@@ -104,12 +104,20 @@ async function loadTelemetryStats() {
         const res = await fetch(`${API_BASE}/api/telemetry/stats`);
         if (res.ok) {
             const stats = await res.json();
+            const rawEl = document.getElementById("metricRawEvents");
+            if (rawEl) {
+                rawEl.innerText = stats.total_raw_events ?? stats.total_persisted_events ?? 0;
+            }
+            const dupEl = document.getElementById("metricDupsSuppressed");
+            if (dupEl) {
+                dupEl.innerText = stats.total_duplicates_suppressed ?? 0;
+            }
             const timeEl = document.getElementById("lastIngestTime");
             if (timeEl) {
                 if (stats.latest_event && stats.latest_event.timestamp) {
                     timeEl.innerText = stats.latest_event.timestamp;
-                } else if (stats.total_persisted_events > 0) {
-                    timeEl.innerText = `${stats.total_persisted_events} events saved`;
+                } else if (stats.total_raw_events > 0) {
+                    timeEl.innerText = `${stats.total_raw_events} raw events (${stats.total_duplicates_suppressed} dups)`;
                 }
             }
         }
@@ -545,6 +553,27 @@ function renderEvaluationReport(report) {
     if (!report || !report.overall_hybrid_metrics) return;
     const hybridM = report.overall_hybrid_metrics.metrics;
     const corr = report.incident_correlation_evaluation;
+
+    // Metadata & Status
+    if (report.evaluation_metadata) {
+        const timeEl = document.getElementById("evalTimestamp");
+        if (timeEl && report.evaluation_metadata.timestamp) {
+            timeEl.innerText = new Date(report.evaluation_metadata.timestamp).toUTCString();
+        }
+    }
+
+    // Stream Deduplication Metrics (Requirement B, C & E)
+    if (report.raw_stream_deduplication_metrics) {
+        const sm = report.raw_stream_deduplication_metrics;
+        const rawEl = document.getElementById("evalStreamRaw");
+        if (rawEl) rawEl.innerText = sm.raw_events_received ?? "--";
+        const unqEl = document.getElementById("evalStreamUnique");
+        if (unqEl) unqEl.innerText = sm.unique_events_analyzed ?? "--";
+        const dupEl = document.getElementById("evalStreamDups");
+        if (dupEl) dupEl.innerText = sm.duplicates_suppressed ?? "--";
+        const rateEl = document.getElementById("evalStreamDedupRate");
+        if (rateEl) rateEl.innerText = (sm.deduplication_rate_pct ?? 0).toFixed(1) + "%";
+    }
 
     document.getElementById("evalPrecision").innerText = (hybridM.precision * 100).toFixed(1) + "%";
     document.getElementById("evalRecall").innerText = (hybridM.recall * 100).toFixed(1) + "%";

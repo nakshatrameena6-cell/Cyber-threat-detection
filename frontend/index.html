@@ -95,8 +95,15 @@
             <div class="metric-card card-purple">
                 <div class="card-icon"><i class="fa-solid fa-database"></i></div>
                 <div class="card-content">
-                    <span class="card-val" id="metricPersistedEvents">0</span>
-                    <span class="card-label">Persisted Telemetry (SQLite)</span>
+                    <span class="card-val" id="metricRawEvents">0</span>
+                    <span class="card-label">Raw Telemetry Ingested</span>
+                </div>
+            </div>
+            <div class="metric-card card-cyan">
+                <div class="card-icon"><i class="fa-solid fa-filter"></i></div>
+                <div class="card-content">
+                    <span class="card-val" id="metricDupsSuppressed">0</span>
+                    <span class="card-label">Duplicates Suppressed</span>
                 </div>
             </div>
             <div class="metric-card card-blue">
@@ -289,34 +296,61 @@
                     </div>
                 </div>
 
-                <!-- Tab 4: Detection Quality Evaluation (Phase 5) -->
+                <!-- Tab 4: Detection Quality Evaluation (Phase 6) -->
                 <div class="tab-content" id="evalTab">
                     <div class="eval-header-strip">
                         <div class="eval-info">
                             <span class="eval-badge"><i class="fa-solid fa-flask"></i> SYNTHETIC BENCHMARK EVALUATION (OFFLINE FIXTURE)</span>
-                            <p class="eval-desc">Evaluates event-level hybrid detection, multi-event correlation, and explainable evidence using isolated database testing without altering live incidents.</p>
+                            <span class="eval-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;" id="evalStatusBadge"><i class="fa-solid fa-check"></i> Benchmark Ready</span>
+                            <p class="eval-desc">Evaluates unique-event hybrid detection, multi-event correlation, and duplicate suppression metrics in an isolated evaluation database. <em>Last Evaluated: <span id="evalTimestamp">Never</span></em></p>
                         </div>
                         <button class="run-eval-btn" id="runEvalBtn" onclick="triggerEvaluationBenchmark()">
                             <i class="fa-solid fa-play"></i> Run Detection Benchmark
                         </button>
                     </div>
 
-                    <div class="eval-metrics-grid">
-                        <div class="eval-stat-card">
-                            <span class="stat-num text-cyan" id="evalPrecision">--</span>
-                            <span class="stat-lbl">Hybrid Precision</span>
+                    <!-- Stream Deduplication Overview (Requirement B & C & E) -->
+                    <div class="eval-sub-section" style="margin-bottom: 1.5rem;">
+                        <h4><i class="fa-solid fa-filter"></i> Telemetry Stream & Deduplication Observability (Live Telemetry View)</h4>
+                        <div class="eval-metrics-grid" style="grid-template-columns: repeat(4, 1fr);">
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-purple" id="evalStreamRaw">--</span>
+                                <span class="stat-lbl">Raw Events Ingested</span>
+                            </div>
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-cyan" id="evalStreamUnique">--</span>
+                                <span class="stat-lbl">Unique Events Analyzed</span>
+                            </div>
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-amber" id="evalStreamDups">--</span>
+                                <span class="stat-lbl">Duplicates Suppressed</span>
+                            </div>
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-emerald" id="evalStreamDedupRate">--</span>
+                                <span class="stat-lbl">Deduplication Flood Reduction</span>
+                            </div>
                         </div>
-                        <div class="eval-stat-card">
-                            <span class="stat-num text-emerald" id="evalRecall">--</span>
-                            <span class="stat-lbl">Hybrid Recall</span>
-                        </div>
-                        <div class="eval-stat-card">
-                            <span class="stat-num text-purple" id="evalF1">--</span>
-                            <span class="stat-lbl">F1 Score</span>
-                        </div>
-                        <div class="eval-stat-card">
-                            <span class="stat-num text-amber" id="evalCorrelationAcc">--</span>
-                            <span class="stat-lbl">Correlation Accuracy</span>
+                    </div>
+
+                    <div class="eval-sub-section" style="margin-bottom: 1.5rem;">
+                        <h4><i class="fa-solid fa-bullseye"></i> Unique Normalized Event Detection Performance (Population: N_unique = N_raw - N_dup)</h4>
+                        <div class="eval-metrics-grid">
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-cyan" id="evalPrecision">--</span>
+                                <span class="stat-lbl">Hybrid Precision</span>
+                            </div>
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-emerald" id="evalRecall">--</span>
+                                <span class="stat-lbl">Hybrid Recall</span>
+                            </div>
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-purple" id="evalF1">--</span>
+                                <span class="stat-lbl">F1 Score</span>
+                            </div>
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-amber" id="evalCorrelationAcc">--</span>
+                                <span class="stat-lbl">Correlation Accuracy</span>
+                            </div>
                         </div>
                     </div>
 

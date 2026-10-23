@@ -28,6 +28,7 @@ from backend.evaluation.metrics import (
     calculate_classification_metrics,
     calculate_per_category_metrics,
     calculate_correlation_metrics,
+    calculate_stream_deduplication_metrics,
 )
 from backend.evaluation.ml_evaluator import MLEvaluator
 
@@ -71,6 +72,10 @@ class EvaluationRunner:
     def run(self) -> Dict[str, Any]:
         """
         Executes the full evaluation against the labeled dataset.
+        Distinguishes:
+          1. Raw Ingestion & Deduplication Stream (N_raw, N_dup, N_dup_incident)
+          2. Unique Normalized Events Detection Performance (N_unique)
+          3. Multi-Event Incident Correlation & Grouping
         """
         if not os.path.exists(self.dataset_path):
             raise FileNotFoundError(f"Evaluation dataset not found at '{self.dataset_path}'")
@@ -78,20 +83,30 @@ class EvaluationRunner:
         with open(self.dataset_path, "r", encoding="utf-8") as f:
             dataset = json.load(f)
 
-        total_events = len(dataset)
+        total_raw_events = len(dataset)
         eval_timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Ground truth and prediction containers
-        y_true_threat: List[bool] = []
-        y_pred_rules: List[bool] = []
-        y_pred_ml: List[bool] = []
-        y_pred_hybrid: List[bool] = []
+        # Telemetry stream counters (Requirement B & C)
+        duplicates_suppressed = 0
+        duplicates_attached_to_incidents = 0
+        unique_events_analyzed = 0
 
-        y_true_category: List[str] = []
-        y_pred_category: List[str] = []
+        # Unique normalized events evaluation containers (Population 1)
+        y_true_threat_unique: List[bool] = []
+        y_pred_rules_unique: List[bool] = []
+        y_pred_ml_unique: List[bool] = []
+        y_pred_hybrid_unique: List[bool] = []
 
-        scenario_groups: List[Optional[str]] = []
-        assigned_incident_ids: List[Optional[str]] = []
+        y_true_category_unique: List[str] = []
+        y_pred_category_unique: List[str] = []
+
+        # Scenario correlation containers (evaluates entire stream with proper duplicate mapping)
+        all_scenario_groups: List[Optional[str]] = []
+        all_assigned_incident_ids: List[Optional[str]] = []
+        all_is_threat: List[bool] = []
+
+        # Raw stream accounting records
+        raw_stream_accounting: List[Dict[str, Any]] = []
 
         # Risk and evidence evaluation containers
         risk_scores: List[float] = []
@@ -103,35 +118,58 @@ class EvaluationRunner:
             gt_is_threat = bool(raw_item.get("ground_truth_is_threat", False))
             gt_cat_str = str(raw_item.get("ground_truth_category", "NONE"))
             expected_group = raw_item.get("expected_incident_group")
+            raw_id = raw_item.get("raw_id", "UNKNOWN")
 
-            y_true_threat.append(gt_is_threat)
-            y_true_category.append(gt_cat_str)
-            scenario_groups.append(expected_group)
-
-            # 1. Normalize
+            # 1. Normalize & Deduplicate
             norm_evt, is_dup = EventNormalizer.normalize(raw_item)
 
             if is_dup:
-                # Deduplicated event
-                y_pred_rules.append(False)
-                y_pred_ml.append(False)
-                y_pred_hybrid.append(False)
-                y_pred_category.append("NONE")
-                assigned_incident_ids.append(None)
+                duplicates_suppressed += 1
+                # Check active incidents to associate duplicate observation
+                active_incidents = self.incident_manager.list_incidents()
+                existing_incident = self.correlation_engine.find_correlatable_incident(norm_evt, active_incidents)
+                if existing_incident:
+                    # Append duplicate observation to incident timeline without re-executing actions
+                    self.correlation_engine.record_duplicate_observation(existing_incident, norm_evt)
+                    self.incident_manager.save_incident_update(existing_incident)
+                    duplicates_attached_to_incidents += 1
+                    all_assigned_incident_ids.append(existing_incident.incident_id)
+                else:
+                    all_assigned_incident_ids.append(None)
+
+                all_scenario_groups.append(expected_group)
+                all_is_threat.append(gt_is_threat)
+
+                raw_stream_accounting.append({
+                    "raw_id": raw_id,
+                    "event_type": norm_evt.event_type.value,
+                    "is_duplicate": True,
+                    "suppressed": True,
+                    "ground_truth_is_threat": gt_is_threat,
+                    "ground_truth_category": gt_cat_str,
+                    "associated_incident_id": existing_incident.incident_id if existing_incident else None
+                })
                 continue
+
+            # Unique normalized event reached detection engine
+            unique_events_analyzed += 1
+            y_true_threat_unique.append(gt_is_threat)
+            y_true_category_unique.append(gt_cat_str)
+            all_scenario_groups.append(expected_group)
+            all_is_threat.append(gt_is_threat)
 
             # 2. Behavioral Vector
             vec, evidence = self.behavioral_engine.update_and_extract(norm_evt)
 
-            # 3. Rules Detection
-            rule_cat, rule_sev, rule_conf, rule_reason = RulesEngine.evaluate(norm_evt)
+            # 3. Rules Detection (Context-Aware Lateral Movement & All Threat Categories)
+            rule_cat, rule_sev, rule_conf, rule_reason = RulesEngine.evaluate(norm_evt, vector=vec)
             rule_detected = (rule_cat != ThreatCategory.NONE)
-            y_pred_rules.append(rule_detected)
+            y_pred_rules_unique.append(rule_detected)
 
             # 4. ML Anomaly Detection
             ml_score = self.ml_detector.predict_anomaly_score(norm_evt, vec)
             ml_detected = (ml_score >= 0.50)
-            y_pred_ml.append(ml_detected)
+            y_pred_ml_unique.append(ml_detected)
 
             is_anomaly_only = (rule_cat == ThreatCategory.NONE)
             active_incidents = self.incident_manager.list_incidents()
@@ -140,16 +178,26 @@ class EvaluationRunner:
             # 5. Hybrid Decision
             if is_anomaly_only and ml_score < 0.65 and not existing_incident:
                 # Benign baseline
-                y_pred_hybrid.append(False)
-                y_pred_category.append("NONE")
-                assigned_incident_ids.append(None)
+                y_pred_hybrid_unique.append(False)
+                y_pred_category_unique.append("NONE")
+                all_assigned_incident_ids.append(None)
                 risk_scores.append(5.0)
                 confidence_scores.append(0.95)
+                raw_stream_accounting.append({
+                    "raw_id": raw_id,
+                    "event_type": norm_evt.event_type.value,
+                    "is_duplicate": False,
+                    "suppressed": False,
+                    "ground_truth_is_threat": gt_is_threat,
+                    "ground_truth_category": gt_cat_str,
+                    "threat_detected": False,
+                    "associated_incident_id": None
+                })
                 continue
 
             # Threat detected by Hybrid pipeline
-            y_pred_hybrid.append(True)
-            y_pred_category.append(rule_cat.value if rule_cat != ThreatCategory.NONE else "ANOMALY_ONLY")
+            y_pred_hybrid_unique.append(True)
+            y_pred_category_unique.append(rule_cat.value if rule_cat != ThreatCategory.NONE else "ANOMALY_ONLY")
 
             # 6. Risk & Explainability Calculation
             risk, conf, rec_act, why_bullets = RiskCalculator.calculate(
@@ -163,7 +211,7 @@ class EvaluationRunner:
             valid_conf = (0.0 <= conf <= 1.0)
             has_evidence = len(why_bullets) > 0
             evidence_checks.append({
-                "raw_id": raw_item.get("raw_id"),
+                "raw_id": raw_id,
                 "risk_score": risk,
                 "confidence": conf,
                 "valid_bounds": (valid_risk and valid_conf),
@@ -188,7 +236,7 @@ class EvaluationRunner:
                     why_bullets=why_bullets
                 )
                 self.incident_manager.save_incident_update(inc)
-                assigned_incident_ids.append(inc.incident_id)
+                all_assigned_incident_ids.append(inc.incident_id)
             else:
                 inc = self.incident_manager.create_incident(
                     event_id=norm_evt.event_id,
@@ -207,25 +255,44 @@ class EvaluationRunner:
                     why_evidence=why_bullets,
                     event_timestamp=norm_evt.timestamp
                 )
-                assigned_incident_ids.append(inc.incident_id)
+                all_assigned_incident_ids.append(inc.incident_id)
 
-        # Compute Event-Level Quantitative Metrics
-        cm_rules = calculate_confusion_matrix(y_true_threat, y_pred_rules)
+            raw_stream_accounting.append({
+                "raw_id": raw_id,
+                "event_type": norm_evt.event_type.value,
+                "is_duplicate": False,
+                "suppressed": False,
+                "ground_truth_is_threat": gt_is_threat,
+                "ground_truth_category": gt_cat_str,
+                "threat_detected": True,
+                "associated_incident_id": inc.incident_id
+            })
+
+        # Calculate Stream Deduplication Metrics (Requirement C)
+        stream_metrics = calculate_stream_deduplication_metrics(
+            raw_total=total_raw_events,
+            unique_total=unique_events_analyzed,
+            duplicates_suppressed=duplicates_suppressed,
+            duplicates_attached_to_incidents=duplicates_attached_to_incidents
+        )
+
+        # Compute Event-Level Quantitative Metrics on Unique Normalized Events (Population 1)
+        cm_rules = calculate_confusion_matrix(y_true_threat_unique, y_pred_rules_unique)
         metrics_rules = calculate_classification_metrics(
             cm_rules["tp"], cm_rules["fp"], cm_rules["tn"], cm_rules["fn"]
         )
 
-        cm_ml = calculate_confusion_matrix(y_true_threat, y_pred_ml)
+        cm_ml = calculate_confusion_matrix(y_true_threat_unique, y_pred_ml_unique)
         metrics_ml = calculate_classification_metrics(
             cm_ml["tp"], cm_ml["fp"], cm_ml["tn"], cm_ml["fn"]
         )
 
-        cm_hybrid = calculate_confusion_matrix(y_true_threat, y_pred_hybrid)
+        cm_hybrid = calculate_confusion_matrix(y_true_threat_unique, y_pred_hybrid_unique)
         metrics_hybrid = calculate_classification_metrics(
             cm_hybrid["tp"], cm_hybrid["fp"], cm_hybrid["tn"], cm_hybrid["fn"]
         )
 
-        # Compute Per-Category Metrics
+        # Compute Per-Category Metrics on Unique Normalized Events
         eval_categories = [
             "NONE",
             ThreatCategory.BRUTE_FORCE.value,
@@ -235,13 +302,13 @@ class EvaluationRunner:
             ThreatCategory.C2_ACTIVITY.value,
             ThreatCategory.UNUSUAL_DATA_TRANSFER.value,
         ]
-        per_category = calculate_per_category_metrics(eval_categories, y_true_category, y_pred_category)
+        per_category = calculate_per_category_metrics(eval_categories, y_true_category_unique, y_pred_category_unique)
 
-        # Compute Incident Correlation Quality Metrics
+        # Compute Incident Correlation Quality Metrics across entire evaluated scenario stream
         correlation_metrics = calculate_correlation_metrics(
-            scenario_groups=scenario_groups,
-            actual_incident_ids=assigned_incident_ids,
-            is_threat=y_true_threat
+            scenario_groups=all_scenario_groups,
+            actual_incident_ids=all_assigned_incident_ids,
+            is_threat=all_is_threat
         )
 
         # Evaluate ML Anomaly Detector on independent holdout dataset (Leak-free)
@@ -255,12 +322,16 @@ class EvaluationRunner:
         report = {
             "evaluation_metadata": {
                 "timestamp": eval_timestamp,
-                "framework": "Spec-Driven Development (Phase 5 SDD)",
+                "framework": "Spec-Driven Development (Phase 6 SDD: Precision Tuning, Deduplication Observability & Evaluation Hardening)",
                 "dataset_path": self.dataset_path,
-                "total_events_evaluated": total_events,
+                "total_raw_events": total_raw_events,
+                "total_unique_events_analyzed": unique_events_analyzed,
+                "total_duplicates_suppressed": duplicates_suppressed,
                 "isolated_db_path": self.db_path,
             },
+            "raw_stream_deduplication_metrics": stream_metrics,
             "overall_hybrid_metrics": {
+                "evaluation_unit": "Unique Normalized Event (Population: N_unique = N_raw - N_dup)",
                 "confusion_matrix": cm_hybrid,
                 "metrics": metrics_hybrid,
             },
@@ -294,6 +365,7 @@ class EvaluationRunner:
                 "tier_c_mandatory_human_approval": True,
                 "ml_anomaly_score_alone_cannot_authorize_remediation": True,
                 "fail_closed_audit_gate_enforced": True,
+                "zero_duplicate_remediation_execution": True,
             }
         }
 
@@ -320,26 +392,43 @@ class EvaluationRunner:
         hybrid_cm = report["overall_hybrid_metrics"]["confusion_matrix"]
         corr = report["incident_correlation_evaluation"]
         ml_h = report["ml_holdout_evaluation"]["metrics"]
+        stream_m = report["raw_stream_deduplication_metrics"]
 
-        md = f"""# Suraksha AI — Detection Quality Evaluation Summary (Phase 5)
+        md = f"""# Suraksha AI — Detection Quality & Deduplication Evaluation Summary (Phase 6)
 
 **Generated:** {report['evaluation_metadata']['timestamp']}  
-**Dataset:** `{report['evaluation_metadata']['dataset_path']}` ({report['evaluation_metadata']['total_events_evaluated']} events)  
-**Database Isolation:** Verified (Isolated evaluation DB)  
+**Dataset:** `{report['evaluation_metadata']['dataset_path']}`  
+**Raw Events Received:** {report['evaluation_metadata']['total_raw_events']}  
+**Unique Events Analyzed:** {report['evaluation_metadata']['total_unique_events_analyzed']}  
+**Duplicate Events Suppressed:** {report['evaluation_metadata']['total_duplicates_suppressed']}  
+**Database Isolation:** Verified (Isolated SQLite test DB)  
 
 ---
 
-## 1. Overall Hybrid Detection Performance (Event-Level)
+## 1. Raw Telemetry Stream & Deduplication Observability (Requirement B & C)
 
-| Metric | Score | Explanation |
+| Stream Metric | Count / Rate | Operational Significance |
+|---|---|---|
+| **Raw Events Ingested** | **{stream_m['raw_events_received']}** | Total unprocessed telemetry events ingested |
+| **Unique Events Analyzed** | **{stream_m['unique_events_analyzed']}** | Events passed through normalization to detection engine |
+| **Duplicates Suppressed** | **{stream_m['duplicates_suppressed']}** | Sliding-window duplicate events suppressed from threat generation |
+| **Duplicates Correlated to Incidents** | **{stream_m['duplicates_attached_to_incidents']}** | Duplicate observations appended to active incident timeline without response re-execution |
+| **Deduplication Rate / Flood Reduction** | **{stream_m['deduplication_rate_pct']:.1f}%** | Percentage of alert flood prevented by normalizer sliding window |
+| **Incident Attachment Rate** | **{stream_m['incident_timeline_attachment_rate_pct']:.1f}%** | Percentage of suppressed duplicates successfully correlated to incident timelines |
+
+---
+
+## 2. Detection Performance on Unique Normalized Events (Population: N_unique = N_raw - N_dup)
+
+| Detection Metric | Score | Explanation |
 |---|---|---|
 | **Precision** | **{hybrid_m['precision']:.4f}** ({hybrid_m['precision']*100:.1f}%) | Ratio of true threat detections over all triggered alarms |
-| **Recall** | **{hybrid_m['recall']:.4f}** ({hybrid_m['recall']*100:.1f}%) | Ratio of detected threats over total actual threats |
+| **Recall** | **{hybrid_m['recall']:.4f}** ({hybrid_m['recall']*100:.1f}%) | Ratio of detected threats over total actual unique threats |
 | **F1 Score** | **{hybrid_m['f1_score']:.4f}** | Harmonic mean of Precision and Recall |
 | **False Positive Rate** | **{hybrid_m['false_positive_rate']:.4f}** ({hybrid_m['false_positive_rate']*100:.1f}%) | False alarms generated per normal operational event |
-| **Accuracy** | **{hybrid_m['accuracy']:.4f}** ({hybrid_m['accuracy']*100:.1f}%) | Overall correct classification rate |
+| **Accuracy** | **{hybrid_m['accuracy']:.4f}** ({hybrid_m['accuracy']*100:.1f}%) | Overall correct classification rate on unique events |
 
-### Event-Level Confusion Matrix
+### Unique Event Confusion Matrix
 - **True Positives (TP):** {hybrid_cm['tp']}
 - **False Positives (FP):** {hybrid_cm['fp']}
 - **True Negatives (TN):** {hybrid_cm['tn']}
@@ -347,7 +436,7 @@ class EvaluationRunner:
 
 ---
 
-## 2. Pipeline Architecture Comparison (Rules vs ML vs Hybrid)
+## 3. Detection Engine Comparison (Unique Events Population)
 
 | Detection Engine | Precision | Recall | F1 Score | False Positive Rate |
 |---|---|---|---|---|
@@ -357,11 +446,11 @@ class EvaluationRunner:
 
 ---
 
-## 3. Incident Correlation Quality (Workstream F)
+## 4. Incident Correlation & Grouping Quality (Requirement B & F)
 
 | Evaluation Metric | Value | Meaning |
 |---|---|---|
-| **Total Attack Scenarios** | {corr['total_attack_scenarios']} | Evaluated attack campaigns |
+| **Total Attack Scenarios** | {corr['total_attack_scenarios']} | Evaluated attack campaigns (including duplicate observations) |
 | **Correctly Grouped Scenarios** | {corr['correctly_grouped_scenarios']} | Multi-event campaigns mapped to unified incident |
 | **Grouping Accuracy** | **{corr['grouping_accuracy']*100:.1f}%** | Multi-stage correlation success rate |
 | **Cross-Contaminated Incidents** | {corr['cross_contaminated_incidents_count']} | Unrelated campaigns incorrectly merged |
@@ -370,14 +459,14 @@ class EvaluationRunner:
 
 ---
 
-## 4. ML Model Holdout Performance (Workstream D - Zero Data Leakage)
+## 5. ML Model Holdout Performance (Zero Data Leakage)
 - **Holdout Test Samples:** {report['ml_holdout_evaluation']['total_holdout_samples']} (150 Normal, 50 Anomalous)
 - **Holdout Precision:** {ml_h['precision']:.4f} | **Holdout Recall:** {ml_h['recall']:.4f} | **Holdout F1:** {ml_h['f1_score']:.4f}
-- **Safety Control:** {report['ml_holdout_evaluation']['safety_invariant']}
+- **Safety Invariant:** {report['ml_holdout_evaluation']['safety_invariant']}
 
 ---
 
-## 5. Risk & Explainability Evaluation (Workstream E)
+## 6. Risk & Explainability Evaluation
 - **Risk Score Range Invariant [0 - 100]:** {'PASSED' if report['risk_and_explainability_evaluation']['risk_bounds_invariant_passed'] else 'FAILED'}
 - **Min / Max Risk Observed:** {report['risk_and_explainability_evaluation']['min_risk_observed']} / {report['risk_and_explainability_evaluation']['max_risk_observed']}
 - **Confidence Range Invariant [0.0 - 1.0]:** PASSED
@@ -399,11 +488,15 @@ def run_evaluation(
 
 
 if __name__ == "__main__":
-    print("[*] Starting Suraksha AI Phase 5 Detection Quality Evaluation Benchmark...")
+    print("[*] Starting Suraksha AI Phase 6 Detection Quality Evaluation Benchmark...")
     report = run_evaluation()
     print(f"[+] Evaluation Complete. Machine-readable report saved to data/evaluation_report.json")
     print(f"[+] Markdown summary saved to data/evaluation_summary.md")
+    print(f"[+] Raw Events:       {report['raw_stream_deduplication_metrics']['raw_events_received']}")
+    print(f"[+] Unique Analyzed:  {report['raw_stream_deduplication_metrics']['unique_events_analyzed']}")
+    print(f"[+] Duplicates:       {report['raw_stream_deduplication_metrics']['duplicates_suppressed']}")
     print(f"[+] Hybrid Precision: {report['overall_hybrid_metrics']['metrics']['precision']:.4f}")
     print(f"[+] Hybrid Recall:    {report['overall_hybrid_metrics']['metrics']['recall']:.4f}")
     print(f"[+] Hybrid F1 Score:  {report['overall_hybrid_metrics']['metrics']['f1_score']:.4f}")
     print(f"[+] Correlation Acc:  {report['incident_correlation_evaluation']['grouping_accuracy']*100:.1f}%")
+

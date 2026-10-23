@@ -79,11 +79,18 @@ def init_db(db_path: Optional[str] = None):
         is_anomalous INTEGER DEFAULT 1,
         verification_status TEXT DEFAULT 'NOT_VERIFIED',
         rollback_status TEXT DEFAULT 'NOT_ROLLED_BACK',
+        duplicate_events_count INTEGER DEFAULT 0,
         updated_at TEXT NOT NULL
     );
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents(created_at);")
+
+    # Safe migration for existing DB files
+    try:
+        cur.execute("ALTER TABLE incidents ADD COLUMN duplicate_events_count INTEGER DEFAULT 0;")
+    except Exception:
+        pass
 
     # 3. Incident-to-Event Relationship
     cur.execute("""
@@ -107,10 +114,16 @@ def init_db(db_path: Optional[str] = None):
         event_type TEXT NOT NULL,
         description TEXT NOT NULL,
         threat_category TEXT NOT NULL,
-        risk_score REAL NOT NULL
+        risk_score REAL NOT NULL,
+        is_duplicate INTEGER DEFAULT 0
     );
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_timelines_inc_id ON incident_timelines(incident_id);")
+
+    try:
+        cur.execute("ALTER TABLE incident_timelines ADD COLUMN is_duplicate INTEGER DEFAULT 0;")
+    except Exception:
+        pass
 
     # 5. Incident Evidence & Why Explanations
     cur.execute("""
@@ -270,6 +283,25 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def get_telemetry_stats(self) -> dict:
+        conn = self.get_conn()
+        try:
+            total_raw = conn.execute("SELECT COUNT(*) as cnt FROM telemetry_events").fetchone()["cnt"]
+            total_dups = conn.execute("SELECT COUNT(*) as cnt FROM telemetry_events WHERE is_duplicate = 1").fetchone()["cnt"]
+            total_unique = total_raw - total_dups
+            # Calculate total duplicate observations linked into incidents
+            cur_dup_inc = conn.execute("SELECT SUM(duplicate_events_count) as cnt FROM incidents").fetchone()["cnt"]
+            correlated_dups = cur_dup_inc if cur_dup_inc else 0
+            return {
+                "total_raw_events": total_raw,
+                "total_unique_events": total_unique,
+                "total_duplicates_suppressed": total_dups,
+                "duplicates_attached_to_incidents": correlated_dups,
+                "deduplication_rate_pct": round((total_dups / total_raw * 100.0) if total_raw > 0 else 0.0, 2)
+            }
+        finally:
+            conn.close()
+
     # --- Incidents ---
     def save_incident(self, inc_dict: dict) -> bool:
         conn = self.get_conn()
@@ -281,8 +313,9 @@ class DatabaseManager:
                 (incident_id, event_id, threat_category, severity, risk_score, confidence_score,
                  source_ip, user_id, affected_user, asset_id, affected_endpoint, details,
                  status, created_at, first_seen, last_seen, recommended_action, decision_tier,
-                 action_executed, assigned_to, is_anomalous, verification_status, rollback_status, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 action_executed, assigned_to, is_anomalous, verification_status, rollback_status,
+                 duplicate_events_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     inc_dict["incident_id"],
                     inc_dict["event_id"],
@@ -307,6 +340,7 @@ class DatabaseManager:
                     1 if inc_dict.get("is_anomalous", True) else 0,
                     inc_dict.get("verification_status", "NOT_VERIFIED"),
                     inc_dict.get("rollback_status", "NOT_ROLLED_BACK"),
+                    int(inc_dict.get("duplicate_events_count", 0)),
                     now_str
                 ))
 
@@ -346,8 +380,8 @@ class DatabaseManager:
                     """, (inc_dict["incident_id"], item["timestamp"], item["event_id"])).fetchone()
                     if not chk:
                         conn.execute("""
-                        INSERT INTO incident_timelines (incident_id, timestamp, event_id, event_type, description, threat_category, risk_score)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO incident_timelines (incident_id, timestamp, event_id, event_type, description, threat_category, risk_score, is_duplicate)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             inc_dict["incident_id"],
                             item["timestamp"],
@@ -355,7 +389,8 @@ class DatabaseManager:
                             item.get("event_type", "EVENT"),
                             item.get("description", ""),
                             item.get("threat_category", str(inc_dict["threat_category"])),
-                            float(item.get("risk_score", inc_dict["risk_score"]))
+                            float(item.get("risk_score", inc_dict["risk_score"])),
+                            1 if item.get("is_duplicate", False) else 0
                         ))
             return True
         finally:
@@ -370,6 +405,7 @@ class DatabaseManager:
             inc = dict(row)
             inc["action_executed"] = bool(inc["action_executed"])
             inc["is_anomalous"] = bool(inc["is_anomalous"])
+            inc["duplicate_events_count"] = int(inc.get("duplicate_events_count", 0))
 
             # Load related events
             evt_rows = conn.execute("SELECT event_id FROM incident_events WHERE incident_id = ?", (incident_id,)).fetchall()
@@ -397,9 +433,13 @@ class DatabaseManager:
                     "event_type": r["event_type"],
                     "description": r["description"],
                     "threat_category": r["threat_category"],
-                    "risk_score": r["risk_score"]
+                    "risk_score": r["risk_score"],
+                    "is_duplicate": bool(r["is_duplicate"]) if "is_duplicate" in r.keys() else False
                 }
                 for r in tl_rows
+            ]
+            inc["suppressed_duplicates"] = [
+                r["event_id"] for r in inc["timeline"] if r.get("is_duplicate") or r.get("event_type") == "DUPLICATE_OBSERVATION"
             ]
 
             return inc

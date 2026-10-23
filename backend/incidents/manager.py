@@ -63,7 +63,9 @@ class IncidentManager:
                 related_events=rec.get("related_events", [rec["event_id"]]),
                 timeline=rec.get("timeline", []),
                 verification_status=rec.get("verification_status", "NOT_VERIFIED"),
-                rollback_status=rec.get("rollback_status", "NOT_ROLLED_BACK")
+                rollback_status=rec.get("rollback_status", "NOT_ROLLED_BACK"),
+                duplicate_events_count=int(rec.get("duplicate_events_count", 0)),
+                suppressed_duplicates=rec.get("suppressed_duplicates", [])
             )
         except Exception:
             return None
