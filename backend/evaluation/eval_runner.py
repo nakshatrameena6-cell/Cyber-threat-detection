@@ -29,8 +29,10 @@ from backend.evaluation.metrics import (
     calculate_per_category_metrics,
     calculate_correlation_metrics,
     calculate_stream_deduplication_metrics,
+    validate_evaluation_report,
 )
 from backend.evaluation.ml_evaluator import MLEvaluator
+
 
 
 class EvaluationRunner:
@@ -179,11 +181,9 @@ class EvaluationRunner:
             y_pred_ml_unique.append(ml_detected)
 
             is_anomaly_only = (rule_cat == ThreatCategory.NONE)
-            active_incidents = self.incident_manager.list_incidents()
-            existing_incident = self.correlation_engine.find_correlatable_incident(norm_evt, active_incidents)
 
             # 5. Hybrid Decision
-            if is_anomaly_only and ml_score < 0.65 and not existing_incident:
+            if is_anomaly_only and ml_score < 0.65:
                 # Benign baseline
                 y_pred_hybrid_unique.append(False)
                 y_pred_category_unique.append(ThreatCategory.NONE.value)
@@ -201,6 +201,11 @@ class EvaluationRunner:
                     "associated_incident_id": None
                 })
                 continue
+
+            active_incidents = self.incident_manager.list_incidents()
+            existing_incident = self.correlation_engine.find_correlatable_incident(
+                norm_evt, active_incidents, threat_cat=rule_cat
+            )
 
             # Threat detected by Hybrid pipeline
             y_pred_hybrid_unique.append(True)
