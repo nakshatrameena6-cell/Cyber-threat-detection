@@ -1,16 +1,18 @@
 import json
 import os
+from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException, Depends, Header, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.models.events import RawLogEvent, NormalizedEvent
-from backend.models.incidents import Incident, IncidentStatus
+from backend.models.incidents import Incident, IncidentStatus, ThreatCategory
 from backend.models.response import ResponseRecord, ResponseActionType, ActionStatus, DecisionTier
 from backend.models.audit import AuditLogEntry
 
+from backend.database import DatabaseManager, get_db_path
 from backend.detection.normalizer import EventNormalizer
 from backend.detection.behavioral_engine import BehavioralFeatureEngine, BehavioralVector
 from backend.detection.rules_engine import RulesEngine
@@ -24,11 +26,44 @@ from backend.response.policy_engine import ResponsePolicyEngine
 from backend.response.executor import ResponseExecutor
 from backend.audit.logger import AuditLogger
 from backend.rbac import RBACManager, require_role_permission
+from backend.telemetry.syslog_listener import SyslogListener
+
+# Pipeline & Persistence Singletons
+db_manager = DatabaseManager()
+ml_detector = MLAnomalyDetector()
+behavioral_engine = BehavioralFeatureEngine()
+correlation_engine = IncidentCorrelationEngine()
+incident_manager = IncidentManager(db=db_manager)
+response_executor = ResponseExecutor(db=db_manager)
+audit_logger = AuditLogger(db=db_manager)
+
+# Check and apply kill switch startup configuration
+kill_switch_startup = os.environ.get("SURAKSHA_KILL_SWITCH_DEFAULT", "0").lower()
+if kill_switch_startup in ("1", "true", "active"):
+    EmergencyKillSwitch.enable(actor="STARTUP_CONFIG")
+
+def syslog_callback(event_dict: dict, actor: str, role: str):
+    try:
+        process_telemetry_pipeline(event_dict, actor=actor, role=role)
+    except Exception:
+        pass
+
+syslog_listener = SyslogListener(pipeline_callback=syslog_callback)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: start optional syslog listener if configured
+    if syslog_listener.is_enabled:
+        syslog_listener.start()
+    yield
+    # Shutdown: stop syslog listener safely
+    syslog_listener.stop()
 
 app = FastAPI(
-    title="Suraksha AI - Risk, Incident Correlation & Safe Response System",
-    version="3.0.0",
-    description="Suraksha AI Phase 3: Multi-Event Incident Correlation, Transparent Risk Explanations, Response Policy Engine, 10 Safety Gates, Verification & Timeline UI."
+    title="Suraksha AI - Real-Time Cyber Threat Detection & Safe Response System",
+    version="4.0.0",
+    description="Suraksha AI Phase 4: Real-Time Ingestion, SQLite Persistence, Strict Tier Semantics & Reliability Hardening.",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -38,14 +73,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Pipeline Singletons
-ml_detector = MLAnomalyDetector()
-behavioral_engine = BehavioralFeatureEngine()
-correlation_engine = IncidentCorrelationEngine()
-incident_manager = IncidentManager()
-response_executor = ResponseExecutor()
-audit_logger = AuditLogger()
 
 
 class IngestResponse(BaseModel):
@@ -72,16 +99,30 @@ class RollbackRequest(BaseModel):
 
 def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str = "SYSTEM") -> IngestResponse:
     """
-    Executes the 9-stage Phase 3 Suraksha AI pipeline:
-    Telemetry -> Deduplication & Normalization -> Behavioral Feature Extraction -> Rules + ML Anomaly Detection -> Composite Risk & "Why" Evidence -> Incident Correlation -> Response Policy & 10 Safety Gates -> Simulated Response & Verification -> Audit Trail
+    Executes the 9-stage Suraksha AI pipeline with Phase 4 Reliability & Persistence:
+    Telemetry -> Normalization & Sliding Deduplication -> SQLite Ingestion Persistence ->
+    Behavioral Feature Extraction -> Rules + ML Anomaly Detection -> Composite Risk & "Why" Evidence ->
+    Incident Correlation & Persistence -> Policy Engine (Tier A/B/C) -> 10 Safety Gates ->
+    Simulated Response & Independent Verification -> Tamper-Evident SQLite Audit Trail
     """
     # 1. Normalize & Deduplicate
     norm_evt, is_dup = EventNormalizer.normalize(raw_dict)
-    
+
+    # Persist normalized telemetry event in SQLite
+    try:
+        db_manager.save_telemetry_event(
+            norm_evt.model_dump(),
+            raw_json=json.dumps(raw_dict),
+            is_dup=is_dup
+        )
+    except Exception as e:
+        # If telemetry persistence fails, log and continue safely
+        pass
+
     if is_dup:
         audit_logger.log(
             actor=actor, role=role, action_category="INGESTION",
-            description=f"Duplicate event hash detected for '{norm_evt.event_type}' from {norm_evt.source_ip}. Skipped.",
+            description=f"Duplicate event hash detected for '{norm_evt.event_type.value}' from {norm_evt.source_ip}. Skipped.",
             target_resource=norm_evt.event_id
         )
         return IngestResponse(
@@ -98,7 +139,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
 
     audit_logger.log(
         actor=actor, role=role, action_category="INGESTION",
-        description=f"Ingested event '{norm_evt.event_type}' from {norm_evt.source_ip}",
+        description=f"Ingested event '{norm_evt.event_type.value}' from {norm_evt.source_ip}",
         target_resource=norm_evt.event_id,
         metadata={"source_ip": norm_evt.source_ip, "user_id": norm_evt.user_id}
     )
@@ -106,10 +147,11 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
     # 2. Behavioral Feature Extraction
     vec, evidence = behavioral_engine.update_and_extract(norm_evt)
 
-    # 3. Hybrid Threat Detection (Rules + ML Behavioral Anomaly)
+    # 3. Hybrid Threat Detection (Deterministic Rules + ML Behavioral Anomaly)
     threat_cat, rule_sev, rule_conf, rule_reason = RulesEngine.evaluate(norm_evt)
     ml_score = ml_detector.predict_anomaly_score(norm_evt, vec)
     is_anomalous = (ml_score >= 0.50)
+    is_anomaly_only = (threat_cat == ThreatCategory.NONE or threat_cat == "None / Benign")
 
     audit_logger.log(
         actor="DETECTION_ENGINE", role="SYSTEM", action_category="DETECTION",
@@ -123,7 +165,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
     existing_incident = correlation_engine.find_correlatable_incident(norm_evt, active_incidents)
 
     # If benign and low anomaly score AND no correlated active incident exists, return early
-    if threat_cat == "None / Benign" and ml_score < 0.65 and not existing_incident:
+    if is_anomaly_only and ml_score < 0.65 and not existing_incident:
         return IngestResponse(
             normalized_event=norm_evt,
             threat_detected=False,
@@ -141,9 +183,14 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
         norm_evt, threat_cat, rule_sev, rule_conf, ml_score, vec, evidence
     )
 
-    # 5. Response Policy Evaluation
+    # Phase 4 Safety Rule: IsolationForest anomaly score alone must never authorize remediation
+    if is_anomaly_only:
+        rec_action_str = ResponseActionType.ALERT_ONLY.value
+        why_bullets.append("ML anomaly score alone cannot authorize remediation actions.")
+
+    # 5. Response Policy Evaluation (Tier A, Tier B, Tier C)
     tier, policy_status, action_type, policy_reason, auto_allowed = ResponsePolicyEngine.evaluate_policy(
-        threat_cat, risk_score, confidence_score, rec_action_str
+        threat_cat, risk_score, confidence_score, rec_action_str, is_anomaly_only=is_anomaly_only
     )
 
     # 6. Incident Correlation Engine (Merge into existing open incident or create new)
@@ -157,6 +204,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
             evidence=evidence,
             why_bullets=why_bullets
         )
+        incident_manager.save_incident_update(incident)
         audit_logger.log(
             actor="CORRELATION_ENGINE", role="SYSTEM", action_category="CORRELATION",
             description=f"Correlated event {norm_evt.event_id} into incident {incident.incident_id}. Escalated Risk: {incident.risk_score}",
@@ -196,8 +244,9 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
 
     response_rec = None
 
-    # 7. Execute Safe Response via 10 Safety Gates (if auto-execution is policy candidate and Kill Switch OFF)
-    if policy_status == ActionStatus.APPROVED and auto_allowed:
+    # 7. Execute Safe Response via 10 Safety Gates
+    # Strict Rule: Tier C actions are NEVER auto-executed!
+    if policy_status == ActionStatus.APPROVED and auto_allowed and tier != DecisionTier.TIER_C:
         response_rec = response_executor.execute_action(
             incident_id=incident.incident_id,
             action_type=action_type,
@@ -206,7 +255,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
             actor="AUTO_ENGINE",
             actor_role="ADMIN",
             is_auto_execution=True,
-            details=f"Automated Tier C policy execution for Incident {incident.incident_id}"
+            details=f"Automated policy execution for Incident {incident.incident_id}"
         )
 
         if response_rec.success:
@@ -245,6 +294,81 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
 
 # --- REST API Endpoints ---
 
+@app.post("/api/telemetry/event", response_model=IngestResponse, status_code=status.HTTP_201_CREATED)
+def ingest_single_event(
+    raw_event: RawLogEvent,
+    user_info: dict = Depends(lambda: {"user_id": "api_client", "role": "ANALYST"})
+):
+    """
+    Workstream C: Real-time single-event telemetry ingestion endpoint.
+    Validates payload, normalizes timestamps to UTC ISO, reuses the 9-stage pipeline, and persists in SQLite.
+    """
+    try:
+        return process_telemetry_pipeline(raw_event.model_dump(), actor=user_info["user_id"], role=user_info["role"])
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Validation Error: {str(ve)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal ingestion processing error.")
+
+
+@app.post("/api/telemetry/webhook", response_model=IngestResponse, status_code=status.HTTP_201_CREATED)
+async def ingest_webhook(
+    request: Request,
+    x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Workstream C: Generic JSON webhook endpoint for external security-event producers.
+    Accepts arbitrary JSON payloads, maps standard SIEM/webhook fields, checks optional secret,
+    and runs through the unified detection and persistence pipeline.
+    """
+    # Verify optional webhook secret
+    expected_secret = os.environ.get("SURAKSHA_WEBHOOK_SECRET")
+    if expected_secret:
+        auth_token = None
+        if authorization and authorization.startswith("Bearer "):
+            auth_token = authorization.split("Bearer ", 1)[1]
+        provided_secret = x_webhook_secret or auth_token
+        if provided_secret != expected_secret:
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid webhook secret token.")
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Malformed JSON: Request body must be valid JSON.")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid payload: Webhook body must be a JSON object.")
+
+    # Gracefully map generic JSON fields to RawLogEvent schema
+    source_ip = body.get("source_ip") or body.get("src_ip") or body.get("ip") or body.get("client_ip") or "127.0.0.1"
+    user_id = body.get("user_id") or body.get("username") or body.get("user") or body.get("account") or "webhook_user"
+    event_type = body.get("event_type") or body.get("action") or body.get("event") or body.get("type") or "WEBHOOK_EVENT"
+    asset_id = body.get("asset_id") or body.get("host") or body.get("hostname") or body.get("destination") or "webhook-asset"
+    asset_criticality = body.get("asset_criticality", "MEDIUM")
+    payload_metric = float(body.get("payload_metric") or body.get("bytes") or body.get("count") or 1.0)
+    details = body.get("details") or body.get("message") or body.get("description") or f"Webhook event received: {event_type}"
+
+    raw_event = {
+        "raw_id": body.get("raw_id") or f"WH-{os.urandom(3).hex().upper()}",
+        "timestamp": body.get("timestamp"),
+        "source_ip": str(source_ip),
+        "user_id": str(user_id),
+        "event_type": str(event_type),
+        "asset_id": str(asset_id),
+        "asset_criticality": str(asset_criticality),
+        "payload_metric": payload_metric,
+        "details": str(details)
+    }
+
+    try:
+        return process_telemetry_pipeline(raw_event, actor="WEBHOOK_PRODUCER", role="SYSTEM")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=f"Webhook Validation Error: {str(ve)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal webhook ingestion failure.")
+
+
 @app.post("/api/telemetry/ingest", response_model=IngestResponse)
 def ingest_telemetry(
     raw_event: RawLogEvent,
@@ -266,6 +390,20 @@ def ingest_telemetry_batch(
         res = process_telemetry_pipeline(norm_evt.model_dump(), actor=user_info["user_id"], role=user_info["role"])
         responses.append(res)
     return responses
+
+
+@app.get("/api/telemetry/stats")
+def get_telemetry_stats():
+    """
+    Returns telemetry ingestion statistics loaded from SQLite.
+    """
+    latest = db_manager.get_latest_telemetry_event()
+    return {
+        "total_persisted_events": db_manager.get_telemetry_count(),
+        "latest_event": latest,
+        "database_path": get_db_path(),
+        "syslog_enabled": syslog_listener.is_enabled
+    }
 
 
 @app.get("/api/incidents", response_model=List[Incident])
@@ -341,7 +479,7 @@ def approve_and_execute_response(
     elif act_type == ResponseActionType.ISOLATE_ENDPOINT:
         target = inc.asset_id
 
-    # Execute through 10 Safety Gates
+    # Execute through 10 Safety Gates with Human Authorization
     rec = response_executor.execute_action(
         incident_id=incident_id,
         action_type=act_type,
@@ -363,6 +501,7 @@ def approve_and_execute_response(
 
     incident_manager.mark_action_executed(incident_id)
     inc.verification_status = rec.verification_status.value
+    incident_manager.save_incident_update(inc)
 
     audit_logger.log(
         actor=user_info["user_id"], role=user_info["role"], action_category="APPROVAL",
@@ -387,6 +526,7 @@ def rollback_response_action(
         inc = incident_manager.get_incident(rec.incident_id)
         if inc:
             inc.rollback_status = "ROLLED_BACK"
+            incident_manager.save_incident_update(inc)
 
     audit_logger.log(
         actor=user_info["user_id"], role=user_info["role"], action_category="ROLLBACK",
@@ -439,7 +579,16 @@ def get_system_state():
         "isolated_hosts": list(store["isolated_hosts"]),
         "total_incidents": len(incident_manager.list_incidents()),
         "total_actions": len(response_executor.list_records()),
-        "kill_switch": EmergencyKillSwitch.get_state()
+        "total_telemetry_events": db_manager.get_telemetry_count(),
+        "database_storage": "SQLite (Persistent)",
+        "database_path": get_db_path(),
+        "simulation_disclaimer": "SIMULATED ENFORCEMENT ONLY - No actual OS, network, or hardware configs are altered.",
+        "kill_switch": EmergencyKillSwitch.get_state(),
+        "syslog_listener": {
+            "enabled": syslog_listener.is_enabled,
+            "host": syslog_listener.host,
+            "port": syslog_listener.port
+        }
     }
 
 

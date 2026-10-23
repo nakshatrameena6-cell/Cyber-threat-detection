@@ -6,14 +6,15 @@ from backend.models.response import ResponseActionType, DecisionTier, ActionStat
 from backend.models.incidents import ThreatCategory
 
 def test_response_policy_engine():
+    # Tier B eligible bounded action (BLOCK_IP) with high confidence auto-executes with notification
     tier, status, act, reason, auto = ResponsePolicyEngine.evaluate_policy(
         ThreatCategory.BRUTE_FORCE, risk_score=85.0, confidence_score=0.90, recommended_action_str="BLOCK_IP"
     )
-    assert tier == DecisionTier.TIER_C
+    assert tier == DecisionTier.TIER_B
     assert status == ActionStatus.APPROVED
     assert auto is True
 
-    # Endpoint isolation high impact policy check
+    # Endpoint isolation high impact policy check mandates Tier C Human Approval (NEVER auto-executed)
     tier, status, act, reason, auto = ResponsePolicyEngine.evaluate_policy(
         ThreatCategory.UNUSUAL_DATA_TRANSFER, risk_score=90.0, confidence_score=0.92, recommended_action_str="ISOLATE_ENDPOINT"
     )
@@ -27,7 +28,7 @@ def test_safety_gate_authorization_failure():
         action_type=ResponseActionType.BLOCK_IP,
         target="198.51.100.10",
         actor_role="AUDITOR", # Auditor lacks EXECUTE_RESPONSE permission
-        tier=DecisionTier.TIER_C,
+        tier=DecisionTier.TIER_B,
         is_auto_execution=False,
         current_state_store=store
     )
@@ -41,7 +42,7 @@ def test_safety_gate_kill_switch():
         action_type=ResponseActionType.BLOCK_IP,
         target="198.51.100.10",
         actor_role="ADMIN",
-        tier=DecisionTier.TIER_C,
+        tier=DecisionTier.TIER_B,
         is_auto_execution=True,
         current_state_store=store
     )
@@ -60,7 +61,7 @@ def test_safety_gate_whitelist_core_asset():
         current_state_store=store
     )
     assert passed is False
-    assert "Whitelist" in reason or "Gate 4" in gate_name
+    assert "Gate 4" in gate_name or "Critical Asset" in gate_name or "core" in reason.lower()
 
 def test_safety_gate_blast_radius_limit():
     # Simulate 5 active blocked IPs
@@ -73,7 +74,7 @@ def test_safety_gate_blast_radius_limit():
         action_type=ResponseActionType.BLOCK_IP,
         target="1.1.1.6", # 6th target exceeds blast radius max limit of 5
         actor_role="ADMIN",
-        tier=DecisionTier.TIER_C,
+        tier=DecisionTier.TIER_B,
         is_auto_execution=False,
         current_state_store=store
     )

@@ -675,7 +675,96 @@ body {
 }
 
 @keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
+    0% { opacity: 0.6; transform: scale(0.95); }
+    50% { opacity: 1; transform: scale(1.05); }
+    100% { opacity: 0.6; transform: scale(0.95); }
 }
+
+/* Phase 4 Status & Disclaimer Banners */
+.status-banner-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    backdrop-filter: blur(8px);
+}
+
+.status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pulse-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    box-shadow: 0 0 10px var(--accent-green);
+    animation: pulse 1.5s infinite;
+}
+
+.disclaimer-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 165, 2, 0.08);
+    border-left: 3px solid var(--accent-amber);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--text-main);
+}
+
+.realtime-box {
+    margin-top: 14px;
+    padding: 12px;
+    background: rgba(0, 242, 254, 0.05);
+    border: 1px dashed rgba(0, 242, 254, 0.3);
+    border-radius: 8px;
+}
+
+.realtime-box h4 {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    color: var(--text-main);
+}
+
+.realtime-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.action-mini-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--primary-cyan);
+    font-size: 0.78rem;
+    font-family: var(--font-heading);
+    font-weight: 500;
+    padding: 7px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.action-mini-btn:hover {
+    background: rgba(0, 242, 254, 0.15);
+    border-color: var(--primary-cyan);
+    transform: translateX(3px);
+}
+

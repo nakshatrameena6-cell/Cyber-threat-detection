@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suraksha AI - Threat Detection & Safe Response System</title>
+    <title>Suraksha AI - Autonomous Threat Detection & Safe Response System</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,7 +23,7 @@
                 <i class="fa-solid fa-shield-halved brand-icon"></i>
                 <div class="brand-text">
                     <h1>Suraksha <span class="highlight">AI</span></h1>
-                    <p class="subtitle">Autonomous Risk, Correlation & Safe Response Engine (Phase 3)</p>
+                    <p class="subtitle">Autonomous Risk, Correlation & Safe Response Engine (Phase 4 — Persistent SQLite & Real-Time Ingestion)</p>
                 </div>
             </div>
 
@@ -43,6 +43,28 @@
                 <span class="system-time" id="clock">00:00:00 UTC</span>
             </div>
         </header>
+
+        <!-- Phase 4 System Status & Safe Simulation Disclaimer Banner -->
+        <section class="status-banner-card">
+            <div class="status-strip">
+                <div class="status-item">
+                    <span class="pulse-indicator"></span>
+                    <span class="status-text"><strong>REAL-TIME PERSISTENCE:</strong> SQLite Database Active (<code id="dbPathDisplay">data/suraksha.db</code>)</span>
+                </div>
+                <div class="status-item">
+                    <i class="fa-solid fa-satellite-dish text-cyan"></i>
+                    <span>Last Ingested: <strong id="lastIngestTime">Awaiting Telemetry</strong></span>
+                </div>
+                <div class="status-item">
+                    <i class="fa-solid fa-radio text-purple"></i>
+                    <span>Syslog UDP Listener: <strong id="syslogStatus">Disabled (Default)</strong></span>
+                </div>
+            </div>
+            <div class="disclaimer-strip">
+                <i class="fa-solid fa-shield-virus text-amber"></i>
+                <span><strong>SAFE SIMULATED EXECUTION ENVIRONMENT:</strong> All IP blockings, user session suspensions, and host isolations are in-memory & SQLite simulations. No physical operating-system or network firewall rules are altered.</span>
+            </div>
+        </section>
 
         <!-- Pipeline Execution Visualizer -->
         <section class="pipeline-section">
@@ -71,6 +93,13 @@
         <!-- Live Metrics Cards -->
         <section class="metrics-grid">
             <div class="metric-card card-purple">
+                <div class="card-icon"><i class="fa-solid fa-database"></i></div>
+                <div class="card-content">
+                    <span class="card-val" id="metricPersistedEvents">0</span>
+                    <span class="card-label">Persisted Telemetry (SQLite)</span>
+                </div>
+            </div>
+            <div class="metric-card card-blue">
                 <div class="card-icon"><i class="fa-solid fa-bug"></i></div>
                 <div class="card-content">
                     <span class="card-val" id="metricIncidents">0</span>
@@ -103,10 +132,10 @@
         <!-- Main Dashboard Content Grid -->
         <div class="dashboard-grid">
 
-            <!-- Left Panel: Stream Ingestion & Attack Simulator -->
+            <!-- Left Panel: Ingestion & Attack Simulator -->
             <aside class="panel left-panel">
                 <div class="panel-header">
-                    <h3><i class="fa-solid fa-stream"></i> Stream Ingestion & Simulator</h3>
+                    <h3><i class="fa-solid fa-stream"></i> Telemetry Ingestion & Simulator</h3>
                 </div>
 
                 <!-- Batch Telemetry Stream Trigger -->
@@ -114,7 +143,20 @@
                     <button class="stream-btn" onclick="injectTelemetryStream()">
                         <i class="fa-solid fa-file-import"></i> INGEST SAMPLE TELEMETRY STREAM
                     </button>
-                    <p class="sim-help">Ingests realistic multi-event stream (`data/sample_telemetry.json`) with out-of-order, duplicate & multi-event correlation handling.</p>
+                    <p class="sim-help">Ingests multi-event dataset (`data/sample_telemetry.json`) with sliding deduplication, persistent incident correlation & tier policies.</p>
+                </div>
+
+                <!-- Phase 4 Single Event & Webhook Ingestion Triggers -->
+                <div class="realtime-box">
+                    <h4><i class="fa-solid fa-bolt text-cyan"></i> Real-Time Ingestion APIs</h4>
+                    <div class="realtime-buttons">
+                        <button class="action-mini-btn" onclick="injectSingleEventDemo()">
+                            <i class="fa-solid fa-paper-plane"></i> Single Event API (POST /event)
+                        </button>
+                        <button class="action-mini-btn" onclick="injectWebhookDemo()">
+                            <i class="fa-solid fa-code-pull-request"></i> Webhook API (POST /webhook)
+                        </button>
+                    </div>
                 </div>
 
                 <div class="simulator-box">
@@ -143,7 +185,7 @@
 
                 <!-- Active Security State Storage Summary -->
                 <div class="state-summary-box">
-                    <h4><i class="fa-solid fa-server"></i> Active Simulated Enforcements</h4>
+                    <h4><i class="fa-solid fa-server"></i> Active Simulated Enforcements (SQLite)</h4>
                     <div class="state-list" id="activeEnforcementsList">
                         <span class="empty-text">No active blocks or isolations.</span>
                     </div>
@@ -160,7 +202,7 @@
                         <i class="fa-solid fa-bolt"></i> Executed Actions (<span id="actCount">0</span>)
                     </button>
                     <button class="tab-btn" onclick="switchTab('auditTab')">
-                        <i class="fa-solid fa-file-signature"></i> Audit Trail
+                        <i class="fa-solid fa-file-signature"></i> Audit Trail (SQLite)
                     </button>
                 </div>
 

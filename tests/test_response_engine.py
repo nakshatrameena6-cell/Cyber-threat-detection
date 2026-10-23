@@ -5,20 +5,20 @@ from backend.response.verifier import ResponseVerifier
 from backend.models.response import DecisionTier, ActionStatus, ResponseActionType, VerificationStatus
 
 def test_decision_tiers():
-    # Tier A check
+    # Tier A check: fully automated alert-only
     tier, status, act, _ = DecisionEngine.evaluate_tier(risk_score=25.0, confidence_score=0.90, recommended_action_str="ALERT_ONLY")
     assert tier == DecisionTier.TIER_A
     assert status == ActionStatus.EXECUTED
 
-    # Tier B check
+    # Tier B check: eligible low-to-medium-impact bounded action auto-executes with notification
     tier, status, act, _ = DecisionEngine.evaluate_tier(risk_score=60.0, confidence_score=0.80, recommended_action_str="BLOCK_IP")
     assert tier == DecisionTier.TIER_B
-    assert status == ActionStatus.PENDING_APPROVAL
+    assert status == ActionStatus.APPROVED
 
-    # Tier C check
+    # Tier C check: high-impact action (ISOLATE_ENDPOINT) mandates human approval (NEVER auto-executed)
     tier, status, act, _ = DecisionEngine.evaluate_tier(risk_score=85.0, confidence_score=0.88, recommended_action_str="ISOLATE_ENDPOINT")
     assert tier == DecisionTier.TIER_C
-    assert status == ActionStatus.APPROVED
+    assert status == ActionStatus.PENDING_APPROVAL
 
 def test_executor_and_verifier():
     executor = ResponseExecutor()
@@ -26,7 +26,7 @@ def test_executor_and_verifier():
         incident_id="INC-1234",
         action_type=ResponseActionType.BLOCK_IP,
         target="198.51.100.55",
-        tier=DecisionTier.TIER_C,
+        tier=DecisionTier.TIER_B,
         actor="AUTO_ENGINE"
     )
     assert rec.status == ActionStatus.EXECUTED

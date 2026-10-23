@@ -47,6 +47,7 @@ function switchTab(tabId) {
 }
 
 // Load System State & Metrics
+// Load System State, SQLite Persistence Metrics & Live Telemetry Stats
 async function loadDashboardState() {
     try {
         const res = await fetch(`${API_BASE}/api/system/state`);
@@ -56,6 +57,19 @@ async function loadDashboardState() {
         document.getElementById("metricBlockedIPs").innerText = (data.blocked_ips || []).length;
         document.getElementById("metricSuspendedUsers").innerText = (data.suspended_users || []).length;
         document.getElementById("metricIsolatedHosts").innerText = (data.isolated_hosts || []).length;
+        if (document.getElementById("metricPersistedEvents")) {
+            document.getElementById("metricPersistedEvents").innerText = data.total_telemetry_events || 0;
+        }
+
+        if (document.getElementById("dbPathDisplay") && data.database_path) {
+            document.getElementById("dbPathDisplay").innerText = data.database_path;
+        }
+
+        if (document.getElementById("syslogStatus") && data.syslog_listener) {
+            document.getElementById("syslogStatus").innerText = data.syslog_listener.enabled
+                ? `Active (${data.syslog_listener.host}:${data.syslog_listener.port})`
+                : "Disabled (Default)";
+        }
 
         // Render Enforcements
         const stateList = document.getElementById("activeEnforcementsList");
@@ -76,8 +90,88 @@ async function loadDashboardState() {
 
         // Kill Switch status update
         updateKillSwitchUI(data.kill_switch.is_active);
+
+        // Fetch Telemetry stats for latest timestamp
+        loadTelemetryStats();
     } catch (e) {
         console.error("Error loading dashboard state:", e);
+    }
+}
+
+async function loadTelemetryStats() {
+    try {
+        const res = await fetch(`${API_BASE}/api/telemetry/stats`);
+        if (res.ok) {
+            const stats = await res.json();
+            const timeEl = document.getElementById("lastIngestTime");
+            if (timeEl) {
+                if (stats.latest_event && stats.latest_event.timestamp) {
+                    timeEl.innerText = stats.latest_event.timestamp;
+                } else if (stats.total_persisted_events > 0) {
+                    timeEl.innerText = `${stats.total_persisted_events} events saved`;
+                }
+            }
+        }
+    } catch (e) {
+        // Silently ignore stats fetch failure
+    }
+}
+
+// Single Event API Demonstration Trigger
+async function injectSingleEventDemo() {
+    triggerPipelineGlow();
+    const sampleEvent = {
+        raw_id: "RT-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
+        timestamp: new Date().toISOString(),
+        source_ip: "198.51.100." + Math.floor(Math.random() * 200 + 10),
+        user_id: "field_agent_" + Math.floor(Math.random() * 50 + 1),
+        event_type: "LOGIN_FAILED",
+        asset_id: "cloud-portal-auth",
+        asset_criticality: "HIGH",
+        payload_metric: 6.0,
+        details: "Real-time single telemetry event via POST /api/telemetry/event"
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/api/telemetry/event`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(sampleEvent)
+        });
+        const data = await res.json();
+        alert(`Single Event Ingested! Event ID: ${data.normalized_event.event_id}\nThreat: ${data.threat_detected ? (data.incident ? data.incident.incident_id : 'Detected') : 'Normal'}\nPersisted to SQLite.`);
+        loadDashboardState();
+        loadIncidents();
+    } catch (e) {
+        alert("Error in single event ingestion: " + e);
+    }
+}
+
+// Webhook API Demonstration Trigger
+async function injectWebhookDemo() {
+    triggerPipelineGlow();
+    const webhookPayload = {
+        src_ip: "10.0.8." + Math.floor(Math.random() * 100 + 1),
+        user: "svc_database_sync",
+        action: "BYTES_OUT",
+        host: "central-sql-01",
+        asset_criticality: "HIGH",
+        bytes: 850.0,
+        description: "External generic JSON webhook telemetry from edge sensor"
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/api/telemetry/webhook`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(webhookPayload)
+        });
+        const data = await res.json();
+        alert(`Webhook Ingested! Status: ${res.status}\nTarget: ${data.normalized_event.source_ip}\nIncident: ${data.incident ? data.incident.incident_id : 'None'}`);
+        loadDashboardState();
+        loadIncidents();
+    } catch (e) {
+        alert("Error in webhook ingestion: " + e);
     }
 }
 
