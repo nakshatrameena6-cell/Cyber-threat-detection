@@ -99,3 +99,26 @@ class IncidentCorrelationEngine:
         incident.timeline.append(timeline_entry)
         
         return incident
+
+    def record_duplicate_observation(self, incident: Incident, event: NormalizedEvent) -> Incident:
+        """
+        Appends a duplicate-observation record to an existing incident timeline
+        and increments the incident's duplicate suppression counter without
+        modifying risk or triggering repeated response actions (Requirement B).
+        """
+        incident.duplicate_events_count += 1
+        if event.event_id not in incident.suppressed_duplicates:
+            incident.suppressed_duplicates.append(event.event_id)
+
+        incident.last_seen = event.timestamp
+        timeline_entry = {
+            "timestamp": event.timestamp,
+            "event_id": event.event_id,
+            "event_type": event.event_type.value,
+            "description": f"Duplicate observation suppressed within sliding window ({incident.duplicate_events_count} total duplicates observed). Original response remains in effect.",
+            "threat_category": incident.threat_category.value,
+            "is_duplicate": True,
+            "risk_score": incident.risk_score
+        }
+        incident.timeline.append(timeline_entry)
+        return incident

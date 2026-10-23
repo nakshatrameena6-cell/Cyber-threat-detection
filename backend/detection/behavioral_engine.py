@@ -12,6 +12,8 @@ class BehavioralVector(BaseModel):
     privilege_change_events: float = 0.0
     data_transfer_volume_mb: float = 0.0
     connection_frequency: float = 0.0
+    port_scan_count: float = 0.0
+    cumulative_scan_targets: float = 0.0
 
 class EntityState:
     def __init__(self):
@@ -21,6 +23,8 @@ class EntityState:
         self.unique_destinations: Set[str] = set()
         self.privilege_count: int = 0
         self.total_data_out_mb: float = 0.0
+        self.port_scan_count: int = 0
+        self.cumulative_scan_targets: float = 0.0
 
 class BehavioralFeatureEngine:
     """
@@ -71,9 +75,18 @@ class BehavioralFeatureEngine:
             u_state.total_data_out_mb += event.payload_metric
             ip_state.total_data_out_mb += event.payload_metric
 
-        elif event.event_type == EventType.C2_BEACON or event.event_type == EventType.PORT_SCAN:
+        elif event.event_type == EventType.C2_BEACON:
             u_state.connection_timestamps.append(evt_time)
             ip_state.connection_timestamps.append(evt_time)
+
+        elif event.event_type == EventType.PORT_SCAN:
+            u_state.connection_timestamps.append(evt_time)
+            ip_state.connection_timestamps.append(evt_time)
+            u_state.port_scan_count += 1
+            ip_state.port_scan_count += 1
+            scan_metric = max(1.0, float(event.payload_metric or 1.0))
+            u_state.cumulative_scan_targets += scan_metric
+            ip_state.cumulative_scan_targets += scan_metric
 
         # Prune old timestamps (> 5 minutes old)
         window_seconds = 300.0
@@ -92,6 +105,8 @@ class BehavioralFeatureEngine:
         priv_events = float(max(u_state.privilege_count, ip_state.privilege_count))
         data_vol = max(event.payload_metric if event.event_type == EventType.BYTES_OUT else 0.0, u_state.total_data_out_mb)
         conn_freq = float(len(u_state.connection_timestamps)) + (event.payload_metric if event.event_type in [EventType.PORT_SCAN, EventType.C2_BEACON] else 0.0)
+        port_scans = float(max(u_state.port_scan_count, ip_state.port_scan_count))
+        cumulative_targets = float(max(u_state.cumulative_scan_targets, ip_state.cumulative_scan_targets))
 
         vec = BehavioralVector(
             failed_login_count=failed_logins,
@@ -100,7 +115,9 @@ class BehavioralFeatureEngine:
             unique_destinations_count=unique_dests,
             privilege_change_events=priv_events,
             data_transfer_volume_mb=data_vol,
-            connection_frequency=conn_freq
+            connection_frequency=conn_freq,
+            port_scan_count=port_scans,
+            cumulative_scan_targets=cumulative_targets
         )
 
         # Generate human-readable behavioral evidence

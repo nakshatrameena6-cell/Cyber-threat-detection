@@ -60,5 +60,7 @@ class Incident(BaseModel):
     why_evidence: List[str] = []
     related_events: List[str] = []
     timeline: List[Dict[str, Any]] = []
+    duplicate_events_count: int = 0
+    suppressed_duplicates: List[str] = []
     verification_status: str = "NOT_VERIFIED"
     rollback_status: str = "NOT_ROLLED_BACK"

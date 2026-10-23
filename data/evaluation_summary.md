@@ -1,6 +1,6 @@
 # Suraksha AI — Detection Quality Evaluation Summary (Phase 5)
 
-**Generated:** 2026-10-23T06:34:35.407465+00:00  
+**Generated:** 2026-10-23T07:27:28.820242+00:00  
 **Dataset:** `data/evaluation_dataset.json` (24 events)  
 **Database Isolation:** Verified (Isolated evaluation DB)  
 
