@@ -1,29 +1,34 @@
 # Suraksha AI - Autonomous Cyber Threat Detection & Safe Response System
 
-An end-to-end, spec-driven **AI Threat Detection, Real-Time Telemetry Ingestion, SQLite Persistence, Detection Quality Evaluation & Detection Precision Hardening (Phase 6 MVP)** for college project demonstration.
+An end-to-end, spec-driven **AI Threat Detection, Real-Time Telemetry Ingestion, SQLite Persistence, Detection Quality Evaluation, Timestamp Resilience, Distributed Correlation & Metric Integrity (Phase 7 MVP)** for college project demonstration.
 
 ---
 
 ## 🌟 Core Features & Highlights
 
-- **Spec-Driven Development (SDD)**: Complete traceability matrix mapping requirements (`REQ-*`) to architecture, source code, and automated test cases (**89/89 tests passing, 100% pass rate**).
-- **Hardened Empirical Detection Quality Evaluation (Phase 6)**:
-  - **Hybrid Precision**: **91.3%**
-  - **Hybrid Recall**: **100.0%** (Zero missed threats!)
-  - **Hybrid F1 Score**: **0.9545**
-  - **Correlation Grouping Accuracy**: **100.0%** across 15 scenario attack graphs.
-  - **Lateral Movement Specificity**: Eliminated benign port health check false positives while reliably catching high-volume, critical infrastructure, and multi-event cumulative stealth port sweeps.
-  - **Stream Deduplication Observability**: Explicit distinction between raw telemetry stream ($N_{\text{raw}}=33$) and normalized unique event detection population ($N_{\text{unique}}=31$), suppressing duplicate floods (6.1% reduction) while safely appending duplicate observations to active incident timelines with zero duplicate responses.
+- **Spec-Driven Development (SDD)**: Complete traceability matrix mapping requirements (`REQ-*`) to architecture, source code, and automated test cases (**111/111 tests passing, 100% pass rate**).
+- **Hardened Empirical Detection Quality Evaluation (Phase 7)**:
+  - **Hybrid Precision**: **100.0%** ($21 / 21$)
+  - **Hybrid Recall**: **100.0%** ($21 / 21$)
+  - **Hybrid Specificity**: **100.0%** ($10 / 10$)
+  - **False Positive Rate**: **0.0%** ($0 / 10$)
+  - **Hybrid F1 Score**: **1.0000**
+  - **Incident Grouping Accuracy**: **100.0%** across 15 scenario attack graphs.
+  - **Metric Integrity Gate**: Single authoritative confusion matrix derivation, mathematical invariant validation ($TP+FP+TN+FN=N_{\text{unique}}$), and elimination of narrative metric contradictions.
+- **Subnet-Aware Distributed Threat Correlation**:
+  - Groups multi-source attacks originating across IPv4 `/24` or IPv6 `/64` CIDR blocks when corroborated by shared target assets, attack categories, or user identities.
+  - Strictly prevents unintended merging of unrelated campaigns or benign operational activity sharing a subnet.
+- **Timestamp Resilience & Out-of-Order Telemetry**:
+  - Full UTC standardization and timezone offset normalization (`+05:30`, `-04:00`, space-separated formats).
+  - 300-second allowed-lateness window preventing state degradation for out-of-order logs.
+  - Future timestamp clamping (>60s drift) and audit trail logging for fallback reasons.
+  - IsolationForest protection: fallback timestamps are masked from off-hours features to prevent false positive alerts.
+- **Real Public-Dataset Batch Evaluation Interface**:
+  - Dedicated batch evaluator (`backend/evaluation/public_dataset_adapter.py`) supporting CIC-IDS2017 and UNSW-NB15 schemas.
+  - Chunked batch processing with path traversal protection, academic licensing documentation, and deterministic train/test splitting.
+  - Strictly honest status reporting (`PENDING_LOCAL_DATA`) when official dataset files are not placed locally; zero benchmark metric fabrication.
 - **Multi-Scenario Labeled Benchmark**: 33-event ground-truth dataset (`data/evaluation_dataset.json`) covering routine operations, benign admin tasks (backups, typos, health checks), 6 attack categories, authorized vs unauthorized scanning, cumulative port scans, critical assets, out-of-order duplicates, and a 4-stage APT sequence.
-- **Decoupled Public-Dataset Adapter**: Extensible adapter interface (`backend/evaluation/public_dataset_adapter.py`) for CIC-IDS2017 & UNSW-NB15 with strict academic licensing documentation, synthetic test fixtures, and zero metric fabrication.
-- **Leak-Free ML Evaluation**: Independent holdout dataset (seed 101, 200 samples) ensuring zero data leakage with baseline training (seed 42).
 - **SQLite Relational Persistence**: Built-in SQLite database layer storing normalized telemetry events, multi-event correlated incidents, chronological timelines with duplicate tracking, explainable evidence, response execution records, pre-state snapshots, and audit trails.
-- **Real-Time Single-Event & Webhook Ingestion**:
-  - `POST /api/telemetry/event`: Low-latency single-event ingestion with sliding deduplication.
-  - `POST /api/telemetry/webhook`: Generic external security webhook with optional token authentication.
-  - Optional UDP loopback Syslog listener (`127.0.0.1:5514`), disabled by default.
-  - `GET /api/telemetry/stats`: Live operational counters for raw received, unique normalized, and duplicate events.
-- **Restart Recovery & State Resiliency**: Survives crashes and restarts, recovering historical incidents, timelines, pre-states, and audit history from SQLite.
 - **Response Policy & Safety Semantics**:
   - **Tier A (Low Risk / Alert-Only)**: Fully automated alert notification.
   - **Tier B (Medium Risk / Low-Impact Remediation)**: Automated bounded actions (`BLOCK_IP`, `SUSPEND_SESSION`) with immediate audit notification when confidence $\ge 0.75$ and all safety gates pass.
@@ -31,14 +36,7 @@ An end-to-end, spec-driven **AI Threat Detection, Real-Time Telemetry Ingestion,
   - **ML Anomaly Protection**: High ML anomaly scores alone without rule corroboration are capped at Tier C (human approval required).
   - **Zero Duplicate Response**: Duplicate observations never re-trigger or authorize automated remediation.
 - **10 Pre-Execution Safety Gates**: Sequential checks (Role Auth, Policy, Kill Switch, Scope, Blast Radius $\le 5$, Gate 6 Audit Check, Pre-State Capture, Idempotency, Timeout, Verifier Availability).
-- **Fail-Closed Audit Requirement**: If database audit persistence fails, simulated response actions immediately fail closed and abort execution.
-- **Safe Simulated Actions, Verification & Reversal**:
-  - `BLOCK_IP`: Dynamic IP block simulation + post-action verification + 1-click unblock rollback.
-  - `SUSPEND_SESSION`: User session invalidation + reactivation rollback.
-  - `ISOLATE_ENDPOINT`: Host network isolation simulation + network re-join rollback.
-- **Global Emergency Kill Switch**: Instant global halt override for automated responses.
-- **Role-Based Access Control (RBAC)**: Enforces `ADMIN`, `ANALYST`, and `AUDITOR` permissions.
-- **Interactive SOC Dashboard**: Real-time Cyber Attack Simulator, live telemetry and duplicate suppression cards, simulation disclaimer banner, live pipeline flow animations, incident queue, enforcement monitor, filterable audit trail, and **Detection Evaluation Benchmark Tab** with dual-population breakdown.
+- **Interactive SOC Dashboard**: Real-time Cyber Attack Simulator, live telemetry and duplicate suppression cards, simulation disclaimer banner, live pipeline flow animations, incident queue, enforcement monitor, filterable audit trail, and **Detection Evaluation Benchmark Tab** with dual-population breakdown and public dataset audit status.
 
 ---
 

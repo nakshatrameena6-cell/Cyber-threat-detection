@@ -1,10 +1,10 @@
 # Suraksha AI — Detection Quality, Distributed Correlation & Metric Integrity Summary (Phase 6 / Phase 7)
 
-**Generated:** 2026-10-23T10:54:06.454077+00:00  
+**Generated:** 2026-10-23T16:46:22.659793+00:00  
 **Dataset:** `data/evaluation_dataset.json` (Synthetic-Hardened-Multi-Scenario-v7)  
 **Raw Events Received:** 33  
-**Unique Events Analyzed:** 29  
-**Duplicate Events Suppressed:** 4  
+**Unique Events Analyzed:** 31  
+**Duplicate Events Suppressed:** 2  
 **Public Dataset Evaluation Status:** `PENDING_LOCAL_DATA` (Official external data not present locally; zero synthetic data fabricated)  
 **Mathematical Validation Gate:** PASSED (All invariants TP+FP+TN+FN verified)  
 **Database Isolation:** Verified (Isolated SQLite test DB)  
@@ -16,11 +16,11 @@
 | Stream Metric | Count / Rate | Operational Significance |
 |---|---|---|
 | **Raw Events Ingested** | **33** | Total unprocessed telemetry events ingested |
-| **Unique Events Analyzed** | **29** | Events passed through normalization to detection engine |
-| **Duplicates Suppressed** | **4** | Sliding-window duplicate events suppressed from threat generation |
+| **Unique Events Analyzed** | **31** | Events passed through normalization to detection engine |
+| **Duplicates Suppressed** | **2** | Sliding-window duplicate events suppressed from threat generation |
 | **Duplicates Correlated to Incidents** | **2** | Duplicate observations appended to active incident timeline without response re-execution |
-| **Deduplication Rate / Flood Reduction** | **12.1%** | Percentage of alert flood prevented by normalizer sliding window |
-| **Incident Attachment Rate** | **50.0%** | Percentage of suppressed duplicates successfully correlated to incident timelines |
+| **Deduplication Rate / Flood Reduction** | **6.1%** | Percentage of alert flood prevented by normalizer sliding window |
+| **Incident Attachment Rate** | **100.0%** | Percentage of suppressed duplicates successfully correlated to incident timelines |
 
 ---
 
@@ -36,10 +36,10 @@
 | **Accuracy** | **1.0000** (100.0%) | Overall correct classification rate on unique events |
 | **Balanced Accuracy** | **1.0000** | Average of Recall and Specificity |
 
-### Unique Event Confusion Matrix (Population = 29)
+### Unique Event Confusion Matrix (Population = 31)
 - **True Positives (TP):** 21
 - **False Positives (FP):** 0
-- **True Negatives (TN):** 8
+- **True Negatives (TN):** 10
 - **False Negatives (FN):** 0
 
 ---
