@@ -431,7 +431,18 @@ def get_telemetry_stats():
         "deduplication_rate_pct": tstats["deduplication_rate_pct"],
         "latest_event": latest,
         "database_path": get_db_path(),
-        "syslog_enabled": syslog_listener.is_enabled
+        "syslog_enabled": syslog_listener.is_enabled,
+        "timestamp_resilience": {
+            "allowed_lateness_seconds": EventNormalizer.allowed_lateness_seconds,
+            "timezone_standard": "UTC (ISO-8601)",
+            "quality_states": ["TRUSTED", "FALLBACK_MALFORMED", "FALLBACK_MISSING", "EXPIRED_LATENESS", "FUTURE_TIMESTAMP"]
+        },
+        "distributed_correlation": {
+            "ipv4_cidr_prefix": correlation_engine.ipv4_cidr_prefix,
+            "ipv6_cidr_prefix": correlation_engine.ipv6_cidr_prefix,
+            "correlation_window_seconds": correlation_engine.window_seconds
+        },
+        "public_dataset_status": "PENDING_LOCAL_DATA"
     }
 
 
@@ -745,10 +756,63 @@ def trigger_evaluation_run(
         actor=user_info.get("user_id", "ANALYST"),
         role=user_info.get("role", "ANALYST"),
         action_category="EVALUATION",
-        description=f"Executed Phase 5 detection quality benchmark. Hybrid Precision: {report['overall_hybrid_metrics']['metrics']['precision']}, Recall: {report['overall_hybrid_metrics']['metrics']['recall']}",
+        description=f"Executed detection quality benchmark. Hybrid Precision: {report['overall_hybrid_metrics']['metrics']['precision']}, Recall: {report['overall_hybrid_metrics']['metrics']['recall']}",
         target_resource="data/evaluation_report.json"
     )
     return report
+
+
+# --- Workstream B: Public Intrusion Detection Dataset Batch Endpoints ---
+
+@app.get("/api/evaluation/public-dataset")
+def get_public_dataset_info():
+    """
+    Returns licensing, attribution, status, and acquisition instructions
+    for supported external intrusion detection datasets (CIC-IDS2017 & UNSW-NB15).
+    """
+    from backend.evaluation.public_dataset_adapter import (
+        PublicDatasetType,
+        DATASET_METADATA,
+        DATASET_ACQUISITION_GUIDE
+    )
+    return {
+        "status": "PENDING_LOCAL_DATA",
+        "message": "Public dataset adapters are configured. Local CSV data files are pending download.",
+        "supported_datasets": [
+            {
+                "type": dt.value,
+                "metadata": DATASET_METADATA[dt].model_dump(),
+                "guide": DATASET_ACQUISITION_GUIDE[dt]
+            }
+            for dt in PublicDatasetType
+        ]
+    }
+
+
+@app.post("/api/evaluation/public-dataset/audit")
+def audit_public_dataset_file(
+    dataset_type: str = "CIC-IDS2017",
+    file_path: Optional[str] = None,
+    user_info: dict = Depends(require_role_permission("VIEW_AUDIT_LOGS"))
+):
+    """
+    Safely audits a local dataset CSV schema, column names, and label distribution.
+    Rejects directory traversal and reports PENDING_LOCAL_DATA if file is absent.
+    """
+    from backend.evaluation.public_dataset_adapter import PublicDatasetType, PublicDatasetBatchEvaluator
+    try:
+        ds_type = PublicDatasetType(dataset_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Unsupported dataset type '{dataset_type}'. Supported: {[d.value for d in PublicDatasetType]}")
+
+    path_to_check = file_path or f"data/external/{ds_type.value.lower().replace('-', '_')}/dataset.csv"
+    try:
+        audit_res = PublicDatasetBatchEvaluator.audit_dataset(path_to_check, ds_type)
+        return audit_res
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dataset audit error: {str(e)}")
 
 
 # Mount static frontend directory
