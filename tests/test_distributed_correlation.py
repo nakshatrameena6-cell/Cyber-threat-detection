@@ -198,7 +198,7 @@ def test_time_window_expiry_prevents_distributed_merge():
     old_time = (now_dt - timedelta(seconds=900)).isoformat()
     inc = mgr.create_incident(
         event_id="EVT-OLD",
-        threat_category=ThreatCategory.PORT_SCAN,
+        threat_category=ThreatCategory.LATERAL_MOVEMENT,
         severity=Severity.HIGH,
         risk_score=75.0,
         confidence_score=0.85,

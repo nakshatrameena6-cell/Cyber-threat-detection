@@ -99,14 +99,13 @@ class IncidentCorrelationEngine:
             # 1. Exact entity correlation matches
             user_match = bool(event.user_id and event.user_id != "unknown" and event.user_id == inc.user_id)
             ip_match = bool(event.source_ip and event.source_ip != "0.0.0.0" and event.source_ip == inc.source_ip)
-            asset_match = bool(event.asset_id and event.asset_id != "unspecified-host" and event.asset_id == inc.asset_id)
 
+            if user_match and ip_match:
+                return inc, f"Exact user and source IP match: {event.user_id} @ {event.source_ip}"
             if user_match:
                 return inc, f"Exact user account match: {event.user_id}"
             if ip_match:
                 return inc, f"Exact source IP match: {event.source_ip}"
-            if asset_match and (user_match or ip_match or (threat_cat and threat_cat in inc.threat_categories)):
-                return inc, f"Target asset match with shared context: {event.asset_id}"
 
             # 2. Context-aware Subnet Distributed Correlation (Requirement D)
             same_subnet, subnet_cidr = self.is_same_subnet(
@@ -130,6 +129,11 @@ class IncidentCorrelationEngine:
                     elif has_common_threat:
                         reason += f" sharing threat category '{threat_cat.value}'"
                     return inc, reason
+
+            # 3. Target asset match with shared user or IP context
+            asset_match = bool(event.asset_id and event.asset_id != "unspecified-host" and event.asset_id == inc.asset_id)
+            if asset_match and (user_match or ip_match):
+                return inc, f"Target asset match with shared context: {event.asset_id}"
 
         return None, None
 
