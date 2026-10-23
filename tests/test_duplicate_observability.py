@@ -20,8 +20,10 @@ from backend.models.events import NormalizedEvent, EventType, AssetCriticality
 from backend.models.incidents import ThreatCategory, Severity, IncidentStatus
 from backend.incidents.manager import IncidentManager
 from backend.incidents.correlation import IncidentCorrelationEngine
-from backend.main import process_telemetry_pipeline, app
+from backend.main import process_telemetry_pipeline, app, incident_manager
 from fastapi.testclient import TestClient
+
+client = TestClient(app)
 
 
 @pytest.fixture
@@ -78,13 +80,16 @@ def test_duplicate_suppression_and_timeline_correlation():
 
     assert res2.is_duplicate is True
     assert res2.threat_detected is False  # Does not manufacture threat
-    assert res2.incident is not None
-    assert res2.incident.incident_id == inc_id  # Associated with SAME incident, not a new one
-    assert res2.incident.duplicate_events_count >= 1
+    assert res2.incident is None  # Does NOT create a second incident
     assert res2.response_record is None  # Zero response action executed
 
-    # Check timeline contains duplicate observation entry
-    dup_entries = [tl for tl in res2.incident.timeline if tl.get("event_type") == "DUPLICATE_OBSERVATION" or tl.get("is_duplicate")]
+    # Check that the existing incident timeline and duplicate count were updated
+    import backend.main as main_mod
+    stored_inc = main_mod.incident_manager.get_incident(inc_id)
+    assert stored_inc is not None
+    assert stored_inc.duplicate_events_count >= 1
+
+    dup_entries = [tl for tl in stored_inc.timeline if tl.get("event_type") == "DUPLICATE_OBSERVATION" or tl.get("is_duplicate")]
     assert len(dup_entries) >= 1
     assert dup_entries[-1]["event_id"] == res2.normalized_event.event_id
 
@@ -156,7 +161,7 @@ def test_duplicate_events_cannot_authorize_remediation():
     assert res2.response_record is None  # Mandatory: zero automated remediation authorized on duplicates
 
 
-def test_telemetry_stats_api_exposes_duplicates(client):
+def test_telemetry_stats_api_exposes_duplicates():
     """
     Requirement B.11 & E:
     Expose meaningful duplicate statistics through GET /api/telemetry/stats.

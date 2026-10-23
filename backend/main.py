@@ -143,7 +143,7 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
                 is_anomalous=False,
                 behavioral_evidence=[f"Duplicate telemetry event observed ({existing_incident.duplicate_events_count} total suppressed for incident)"],
                 why_evidence=["Duplicate observation associated with active incident timeline without response re-execution."],
-                incident=existing_incident,
+                incident=None,
                 response_record=None,
                 message=f"Duplicate event observed and correlated to incident {existing_incident.incident_id}."
             )

@@ -1,12 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 class AssetCriticality(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 class EventType(str, Enum):
     LOGIN_FAILED = "LOGIN_FAILED"
@@ -39,4 +40,5 @@ class NormalizedEvent(BaseModel):
     asset_criticality: AssetCriticality
     payload_metric: float
     details: str
-    normalized_at: str
+    normalized_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
