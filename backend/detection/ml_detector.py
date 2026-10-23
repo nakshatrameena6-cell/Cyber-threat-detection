@@ -43,13 +43,15 @@ class MLAnomalyDetector:
         if vector is None:
             # Fallback construct basic vector from single event
             off_hours = 0.0
-            if "T" in event.timestamp and ":" in event.timestamp:
-                try:
-                    h = int(event.timestamp.split("T")[1].split(":")[0])
-                    if h < 8 or h >= 18:
-                        off_hours = 1.0
-                except Exception:
-                    pass
+            ts_qual = getattr(event, "timestamp_quality", "TRUSTED")
+            if str(ts_qual) not in ["FALLBACK_MALFORMED", "FALLBACK_MISSING", "FUTURE_TIMESTAMP"]:
+                if "T" in event.timestamp and ":" in event.timestamp:
+                    try:
+                        h = int(event.timestamp.split("T")[1].split(":")[0])
+                        if h < 8 or h >= 18:
+                            off_hours = 1.0
+                    except Exception:
+                        pass
 
             return np.array([[
                 event.payload_metric if event.event_type.value == "LOGIN_FAILED" else 0.0,
@@ -78,7 +80,9 @@ class MLAnomalyDetector:
         # Domain safety overrides for high-threat indicators
         if event.payload_metric >= 500.0:
             return 0.95
-        if event.event_type.value in ["C2_BEACON", "PORT_SCAN"]:
+        if event.event_type.value == "C2_BEACON":
+            return 0.90
+        if event.event_type.value == "PORT_SCAN" and (event.payload_metric >= 5.0 or (vector and vector.cumulative_scan_targets >= 5.0)):
             return 0.90
         if event.event_type.value == "AUTH_SUCCESS" and (vector is None or vector.failed_login_count < 3.0):
             return 0.10

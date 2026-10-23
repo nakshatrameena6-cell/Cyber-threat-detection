@@ -19,6 +19,14 @@ class EventType(str, Enum):
     BYTES_OUT = "BYTES_OUT"
     CUSTOM = "CUSTOM"
 
+class TimestampQuality(str, Enum):
+    TRUSTED = "TRUSTED"
+    FALLBACK_MALFORMED = "FALLBACK_MALFORMED"
+    FALLBACK_MISSING = "FALLBACK_MISSING"
+    OUT_OF_ORDER = "OUT_OF_ORDER"
+    EXPIRED_LATENESS = "EXPIRED_LATENESS"
+    FUTURE_TIMESTAMP = "FUTURE_TIMESTAMP"
+
 class RawLogEvent(BaseModel):
     raw_id: Optional[str] = None
     timestamp: Optional[str] = None
@@ -40,5 +48,10 @@ class NormalizedEvent(BaseModel):
     asset_criticality: AssetCriticality
     payload_metric: float
     details: str
+    raw_timestamp: Optional[str] = None
+    timestamp_quality: TimestampQuality = TimestampQuality.TRUSTED
+    timestamp_fallback_reason: Optional[str] = None
+    ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     normalized_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 

@@ -116,7 +116,14 @@ class EvaluationRunner:
         # Execute events sequentially through the 9-stage pipeline
         for raw_item in dataset:
             gt_is_threat = bool(raw_item.get("ground_truth_is_threat", False))
-            gt_cat_str = str(raw_item.get("ground_truth_category", "NONE"))
+            raw_gt_cat = str(raw_item.get("ground_truth_category", "NONE"))
+            # Normalize ground truth category to ThreatCategory value for exact category support matching
+            gt_cat_str = ThreatCategory.NONE.value
+            for tc in ThreatCategory:
+                if tc.name == raw_gt_cat or tc.value == raw_gt_cat:
+                    gt_cat_str = tc.value
+                    break
+
             expected_group = raw_item.get("expected_incident_group")
             raw_id = raw_item.get("raw_id", "UNKNOWN")
 
@@ -179,7 +186,7 @@ class EvaluationRunner:
             if is_anomaly_only and ml_score < 0.65 and not existing_incident:
                 # Benign baseline
                 y_pred_hybrid_unique.append(False)
-                y_pred_category_unique.append("NONE")
+                y_pred_category_unique.append(ThreatCategory.NONE.value)
                 all_assigned_incident_ids.append(None)
                 risk_scores.append(5.0)
                 confidence_scores.append(0.95)
@@ -294,7 +301,7 @@ class EvaluationRunner:
 
         # Compute Per-Category Metrics on Unique Normalized Events
         eval_categories = [
-            "NONE",
+            ThreatCategory.NONE.value,
             ThreatCategory.BRUTE_FORCE.value,
             ThreatCategory.SUSPICIOUS_LOGIN.value,
             ThreatCategory.PRIVILEGE_ESCALATION.value,

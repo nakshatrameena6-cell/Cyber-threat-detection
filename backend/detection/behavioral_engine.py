@@ -88,10 +88,21 @@ class BehavioralFeatureEngine:
             u_state.cumulative_scan_targets += scan_metric
             ip_state.cumulative_scan_targets += scan_metric
 
-        # Prune old timestamps (> 5 minutes old)
+        # Prune old timestamps (> 5 minutes old relative to latest observed event time)
         window_seconds = 300.0
-        u_state.failed_login_timestamps = [t for t in u_state.failed_login_timestamps if (evt_time - t).total_seconds() <= window_seconds]
-        ip_state.failed_login_timestamps = [t for t in ip_state.failed_login_timestamps if (evt_time - t).total_seconds() <= window_seconds]
+        all_u_ts = [evt_time] + u_state.failed_login_timestamps
+        all_ip_ts = [evt_time] + ip_state.failed_login_timestamps
+        latest_u = max(all_u_ts) if all_u_ts else evt_time
+        latest_ip = max(all_ip_ts) if all_ip_ts else evt_time
+
+        u_state.failed_login_timestamps = [
+            t for t in u_state.failed_login_timestamps
+            if 0.0 <= (latest_u - t).total_seconds() <= window_seconds
+        ]
+        ip_state.failed_login_timestamps = [
+            t for t in ip_state.failed_login_timestamps
+            if 0.0 <= (latest_ip - t).total_seconds() <= window_seconds
+        ]
 
         # Calculate metrics
         failed_logins = float(max(len(u_state.failed_login_timestamps), len(ip_state.failed_login_timestamps)))
@@ -99,7 +110,12 @@ class BehavioralFeatureEngine:
         
         # Off-hours check (before 8 AM or after 6 PM UTC)
         hour = evt_time.hour
-        off_hours = 1.0 if (hour < 8 or hour >= 18) else 0.0
+        # Mask off-hours for synthetic or fallback timestamps to prevent spurious anomaly attribution
+        ts_qual = getattr(event, "timestamp_quality", "TRUSTED")
+        if str(ts_qual) in ["FALLBACK_MALFORMED", "FALLBACK_MISSING", "FUTURE_TIMESTAMP"]:
+            off_hours = 0.0
+        else:
+            off_hours = 1.0 if (hour < 8 or hour >= 18) else 0.0
 
         unique_dests = float(max(len(u_state.unique_destinations), len(ip_state.unique_destinations)))
         priv_events = float(max(u_state.privilege_count, ip_state.privilege_count))

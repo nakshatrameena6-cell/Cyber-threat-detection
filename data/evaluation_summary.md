@@ -1,10 +1,10 @@
 # Suraksha AI — Detection Quality & Deduplication Evaluation Summary (Phase 6)
 
-**Generated:** 2026-10-23T09:44:29.560590+00:00  
+**Generated:** 2026-10-23T10:27:52.860867+00:00  
 **Dataset:** `data/evaluation_dataset.json`  
 **Raw Events Received:** 33  
-**Unique Events Analyzed:** 30  
-**Duplicate Events Suppressed:** 3  
+**Unique Events Analyzed:** 31  
+**Duplicate Events Suppressed:** 2  
 **Database Isolation:** Verified (Isolated SQLite test DB)  
 
 ---
@@ -14,11 +14,11 @@
 | Stream Metric | Count / Rate | Operational Significance |
 |---|---|---|
 | **Raw Events Ingested** | **33** | Total unprocessed telemetry events ingested |
-| **Unique Events Analyzed** | **30** | Events passed through normalization to detection engine |
-| **Duplicates Suppressed** | **3** | Sliding-window duplicate events suppressed from threat generation |
+| **Unique Events Analyzed** | **31** | Events passed through normalization to detection engine |
+| **Duplicates Suppressed** | **2** | Sliding-window duplicate events suppressed from threat generation |
 | **Duplicates Correlated to Incidents** | **2** | Duplicate observations appended to active incident timeline without response re-execution |
-| **Deduplication Rate / Flood Reduction** | **9.1%** | Percentage of alert flood prevented by normalizer sliding window |
-| **Incident Attachment Rate** | **66.7%** | Percentage of suppressed duplicates successfully correlated to incident timelines |
+| **Deduplication Rate / Flood Reduction** | **6.1%** | Percentage of alert flood prevented by normalizer sliding window |
+| **Incident Attachment Rate** | **100.0%** | Percentage of suppressed duplicates successfully correlated to incident timelines |
 
 ---
 
@@ -29,13 +29,13 @@
 | **Precision** | **0.9130** (91.3%) | Ratio of true threat detections over all triggered alarms |
 | **Recall** | **1.0000** (100.0%) | Ratio of detected threats over total actual unique threats |
 | **F1 Score** | **0.9545** | Harmonic mean of Precision and Recall |
-| **False Positive Rate** | **0.2222** (22.2%) | False alarms generated per normal operational event |
-| **Accuracy** | **0.9333** (93.3%) | Overall correct classification rate on unique events |
+| **False Positive Rate** | **0.2000** (20.0%) | False alarms generated per normal operational event |
+| **Accuracy** | **0.9355** (93.5%) | Overall correct classification rate on unique events |
 
 ### Unique Event Confusion Matrix
 - **True Positives (TP):** 21
 - **False Positives (FP):** 2
-- **True Negatives (TN):** 7
+- **True Negatives (TN):** 8
 - **False Negatives (FN):** 0
 
 ---
@@ -45,8 +45,8 @@
 | Detection Engine | Precision | Recall | F1 Score | False Positive Rate |
 |---|---|---|---|---|
 | **Deterministic Rules Only** | 1.0000 | 1.0000 | 1.0000 | 0.0000 |
-| **ML IsolationForest Only** | 0.8824 | 0.7143 | 0.7895 | 0.2222 |
-| **Hybrid Pipeline (Suraksha AI)** | **0.9130** | **1.0000** | **0.9545** | **0.2222** |
+| **ML IsolationForest Only** | 0.8824 | 0.7143 | 0.7895 | 0.2000 |
+| **Hybrid Pipeline (Suraksha AI)** | **0.9130** | **1.0000** | **0.9545** | **0.2000** |
 
 ---
 

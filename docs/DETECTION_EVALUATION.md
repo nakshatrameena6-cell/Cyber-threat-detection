@@ -1,151 +1,148 @@
 # Detection Quality Evaluation & Attack Replay Specification (DETECTION_EVALUATION.md)
-## Suraksha AI — Phase 5 Spec-Driven Evaluation Report
+## Suraksha AI — Phase 6 Spec-Driven Evaluation Report
+### Precision Tuning, Duplicate-Aware Correlation & Evaluation Hardening
 
-**Document Version:** 5.0.0  
-**Phase:** 5 (Detection Quality Evaluation, Attack Replay & False-Positive Analysis)  
-**Status:** Approved & Verified  
-**Dataset:** [`data/evaluation_dataset.json`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/data/evaluation_dataset.json) (24 Multi-Scenario Labeled Events)  
+**Document Version:** 6.0.0  
+**Phase:** 6 (Detection Precision Tuning, Duplicate-Aware Correlation & Evaluation Hardening)  
+**Status:** Approved & Verified (89/89 Tests Passing)  
+**Dataset:** [`data/evaluation_dataset.json`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/data/evaluation_dataset.json) (33 Multi-Scenario Labeled Events)  
 **Machine-Readable Report:** [`data/evaluation_report.json`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/data/evaluation_report.json)  
+**Human-Readable Summary:** [`data/evaluation_summary.md`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/data/evaluation_summary.md)  
 
 ---
 
-## 1. Objectives & Evaluation Framework
+## 1. Objectives & Evaluation Architecture
 
-Phase 5 establishes empirical, quantitative evidence of Suraksha AI's detection efficacy, discriminative power, multi-stage correlation quality, and explainable risk transparency.
+Phase 6 hardens Suraksha AI detection evaluation by addressing the known false positive on routine administrative port health checks, making duplicate event suppression observable, clarifying evaluation semantics between raw stream ingestion and unique normalized event detection, and expanding synthetic scenario coverage.
 
-### Core Evaluation Objectives
-1. **Quantitative Performance Metrics**: Measure event-level Precision, Recall, F1 Score, False Positive Rate (FPR), and Accuracy with explicit zero-denominator handling.
-2. **Per-Category Performance**: Quantify detection rates across all 6 threat categories (`BRUTE_FORCE`, `SUSPICIOUS_LOGIN`, `PRIVILEGE_ESCALATION`, `LATERAL_MOVEMENT`, `C2_ACTIVITY`, `UNUSUAL_DATA_TRANSFER`) and normal baseline traffic (`NONE`).
-3. **Architecture Comparison**: Compare Deterministic Rules Alone vs ML IsolationForest Alone vs the Hybrid Pipeline.
-4. **Holdout ML Evaluation Without Data Leakage**: Train the IsolationForest model on a baseline dataset (seed 42) and evaluate on an independent holdout dataset (seed 101, 200 samples) to verify generalization.
-5. **Multi-Stage Incident Correlation Quality**: Measure grouping accuracy, cross-incident contamination, and incident fragmentation.
-6. **Risk Bounds & Explainability Invariants**: Verify that risk scores remain in $[0.0, 100.0]$, confidence in $[0.0, 1.0]$, and explainable evidence bullet points reflect real event attributes without hallucination.
-7. **Database Isolation**: Ensure benchmarks execute within an isolated temporary SQLite database without polluting development or production records.
+### Operational Definitions of Evaluation Units
+To eliminate the metric ambiguity identified in Phase 5:
+- **Raw Events Received ($N_{\text{raw}}$)**: The total volume of unprocessed security telemetry events ingested by the system across HTTP endpoints, batch streams, or Syslog.
+- **Accepted Normalized Events**: Events that successfully pass Pydantic schema validation and timestamp parsing.
+- **Suppressed Duplicate Events ($N_{\text{dup}}$)**: Identical events matching an active sliding-window hash that are suppressed from initiating redundant threat detection or executing duplicate remediation actions.
+- **Unique Events Analyzed ($N_{\text{unique}} = N_{\text{raw}} - N_{\text{dup}}$)**: Unique normalized events evaluated by behavioral feature extraction, deterministic rules, and ML anomaly detection. **This is the true evaluation population for threat detection metrics.**
+- **Threat Detections**: Unique events classified by rules or hybrid pipelines as non-benign threats.
+- **Correlated Incident Observations**: Suppressed duplicate events safely linked to the timeline of an active incident to provide visibility into attack persistence without re-triggering responses.
 
 ---
 
-## 2. Dataset Composition & Ground-Truth Methodology
+## 2. Investigation and Resolution of Phase 5 Baseline Deficiencies
 
-The evaluation dataset ([`data/evaluation_dataset.json`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/data/evaluation_dataset.json)) contains 24 structured, synthetic security events representing realistic SOC scenarios. All entries feature documented ground-truth labels and scenario IDs.
+### 2.1 Lateral Movement Detection Specificity (False Positive Fix)
+- **Root Cause in Phase 5**: The rules engine previously evaluated `if event.event_type == EventType.PORT_SCAN:` without considering scan volume, destination asset criticality, or authorized scanner context. As a result, routine administrative health checks (e.g. `EVAL-NORM-005`, where user `carol_ops` queried port 80 and 443 on `dev-sandbox-01`, payload metric 2.0) triggered a `LATERAL_MOVEMENT` alert.
+- **Phase 6 Implementation**:
+  1. **Configurable Thresholds**: Introduced `MIN_SCAN_TARGETS_THRESHOLD = 5.0` and `HIGH_VOLUME_SCAN_THRESHOLD = 15.0`.
+  2. **Authorized Scanner Exemption**: Port scans with volume $< 5.0$ performed by authorized operations accounts (`carol_ops`, `nessus_scanner`) on non-critical dev/sandbox assets are classified as `ThreatCategory.NONE` with low severity.
+  3. **Critical Asset Protection**: Probing ports on assets designated `CRITICAL` or `HIGH` (e.g., `core-banking-db`, `auth-gateway`, domain controllers) is **never silently exempted**, even at low volumes.
+  4. **Cumulative Stealth Scanning Detection**: Probes below the single-event threshold ($< 5.0$) are tracked across sequential events using the behavioral engine (`v.cumulative_scan_targets` and `v.port_scan_count`). When cumulative targets reach threshold ($\ge 5.0$), an escalated `LATERAL_MOVEMENT` alert is triggered, preventing attacker threshold-gaming.
+  5. **Explainable Why Evidence**: Grounded reasoning states whether an event was exempted due to authorized health check parameters or flagged for critical asset targeting / cumulative volume.
 
-### Scenario Distribution
+### 2.2 Suppressed Duplicate False Negative Resolution
+- **Root Cause in Phase 5**: The normalizer correctly identified duplicate brute-force event `EVAL-EDGE-DUP-001` (second arrival) and suppressed it (`is_dup = True`). However, the evaluation harness evaluated the raw event stream against ground-truth `is_threat = True`, recording a False Negative (missed threat) against the unique-event detection engine.
+- **Phase 6 Implementation**:
+  1. **Dual-Population Accounting**: Separated raw stream ingestion metrics ($N_{\text{raw}} = 33$) from unique normalized event detection metrics ($N_{\text{unique}} = 31$).
+  2. **Incident Timeline Association**: When a duplicate arrives after an incident is created, `correlation_engine.record_duplicate_observation(incident, event)` increments `incident.duplicate_events_count` and appends a `DUPLICATE_OBSERVATION` entry to the incident timeline with `is_duplicate = True`.
+  3. **Zero Automated Remediation**: Duplicate events never re-trigger Tier B or Tier C actions, maintaining strict idempotency and preserving safety gates.
+  4. **Mathematical Consistency**: $TP + FP + TN + FN = N_{\text{unique}}$ holds identically across rules, ML, and hybrid pipelines.
 
-| Scenario Group | Scenario ID | Description | Ground-Truth Label | Event Count |
+---
+
+## 3. Dataset Composition & Expanded Scenarios (Phase 6)
+
+The evaluation dataset ([`data/evaluation_dataset.json`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/data/evaluation_dataset.json)) was expanded from 24 to 33 synthetic security records covering all required Phase 6 edge cases:
+
+| Scenario Group | Scenario ID | Description | Ground Truth | Event Count |
 |---|---|---|---|---|
-| **Normal Operations** | `SCENARIO-NORMAL-LOGIN` | Morning authentication during business hours | `NONE` (Benign) | 1 |
-| **Normal Operations** | `SCENARIO-NORMAL-TRAFFIC` | Routine internal document download (15 MB) | `NONE` (Benign) | 1 |
-| **Benign Typo** | `SCENARIO-BENIGN-TYPO` | Mistyped password followed by immediate login | `NONE` (Benign) | 2 |
-| **Benign Admin Ops** | `SCENARIO-BENIGN-PORT-CHECK` | Routine health check of dev services (port 80/443) | `NONE` (Benign, Edge Case) | 1 |
-| **Benign Backup** | `SCENARIO-BENIGN-BACKUP` | Scheduled nightly database backup (50 MB) | `NONE` (Benign) | 1 |
-| **Benign Admin** | `SCENARIO-NORMAL-ADMIN` | Midday authentication by authorized administrator | `NONE` (Benign) | 1 |
-| **Brute Force** | `SCENARIO-ATTACK-BRUTEFORCE` | Rapid failed login waves targeting auth gateway | `BRUTE_FORCE` | 2 |
-| **Suspicious Login** | `SCENARIO-ATTACK-SUSP-LOGIN` | Remote login from anomalous country at 03:10 AM | `SUSPICIOUS_LOGIN` | 1 |
-| **Privilege Escalation** | `SCENARIO-ATTACK-PRIV-ESC` | Unauthorized `sudo su` attempt by application user | `PRIVILEGE_ESCALATION` | 1 |
+| **Normal Operations** | `SCENARIO-NORMAL-LOGIN` | Business hours workstation login | Benign (`NONE`) | 1 |
+| **Normal Operations** | `SCENARIO-NORMAL-TRAFFIC` | Routine internal document download | Benign (`NONE`) | 1 |
+| **Benign Typo** | `SCENARIO-BENIGN-TYPO` | Failed password followed by immediate success | Benign (`NONE`) | 2 |
+| **Benign Ops Port Check** | `SCENARIO-BENIGN-PORT-CHECK` | Carol ops health check on sandbox (ports 80/443) | Benign (`NONE`) | 1 |
+| **Benign Backup** | `SCENARIO-BENIGN-BACKUP` | Scheduled nightly database backup (50 MB) | Benign (`NONE`) | 1 |
+| **Benign Admin** | `SCENARIO-NORMAL-ADMIN` | Legitimate midday system administrator login | Benign (`NONE`) | 1 |
+| **Brute Force Wave** | `SCENARIO-ATTACK-BRUTEFORCE` | High-velocity login failure wave | `BRUTE_FORCE` | 2 |
+| **Suspicious Login** | `SCENARIO-ATTACK-SUSP-LOGIN` | Off-hours geolocation anomaly at 03:10 AM | `SUSPICIOUS_LOGIN` | 1 |
+| **Privilege Escalation** | `SCENARIO-ATTACK-PRIV-ESC` | Unauthorized `sudo su` shell attempt | `PRIVILEGE_ESCALATION` | 1 |
 | **Lateral Movement** | `SCENARIO-ATTACK-LATERAL-MOV` | Internal TCP SYN sweep across 40 hosts | `LATERAL_MOVEMENT` | 1 |
-| **C2 Beaconing** | `SCENARIO-ATTACK-C2` | Periodic HTTP beaconing every 10s to dynamic DNS | `C2_ACTIVITY` | 1 |
-| **Data Exfiltration** | `SCENARIO-ATTACK-EXFIL` | Outbound transfer of 750 MB database archive | `UNUSUAL_DATA_TRANSFER` | 1 |
-| **Multi-Stage APT** | `SCENARIO-MULTISTAGE-APT` | 4-stage campaign: BF $\rightarrow$ Susp Login $\rightarrow$ Sudo $\rightarrow$ Exfil | Multi-Threat Correlated | 4 |
-| **Edge: Missing Fields** | `SCENARIO-EDGE-MISSING-FIELDS`| Normal authentication with null optional fields | `NONE` (Benign) | 1 |
-| **Edge: Duplicate** | `SCENARIO-EDGE-DUPLICATES` | Exact duplicate brute force event within 5s window | `BRUTE_FORCE` (Edge) | 2 |
-| **Edge: Out-of-Order** | `SCENARIO-EDGE-OUT-OF-ORDER` | Out-of-order early morning authentication | `NONE` (Benign) | 1 |
-| **Unrelated Actors** | `SCENARIO-UNRELATED-CORRELATION`| Independent concurrent attacks from Alpha and Beta | Distinct Threats | 2 |
+| **C2 Activity** | `SCENARIO-ATTACK-C2` | Periodic outbound HTTP beaconing | `C2_ACTIVITY` | 1 |
+| **Data Exfiltration** | `SCENARIO-ATTACK-EXFIL` | Outbound transfer of 750 MB archive | `UNUSUAL_DATA_TRANSFER` | 1 |
+| **Multi-Stage APT** | `SCENARIO-MULTISTAGE-APT` | 4-stage campaign: BF $\rightarrow$ Login $\rightarrow$ Sudo $\rightarrow$ Exfil | Multi-Threat | 4 |
+| **Edge: Missing Fields** | `SCENARIO-EDGE-MISSING-FIELDS`| Normal authentication with null optional fields | Benign (`NONE`) | 1 |
+| **Edge: Duplicate Pair** | `SCENARIO-EDGE-DUPLICATES` | Initial BF event + suppressed sliding duplicate | `BRUTE_FORCE` | 2 |
+| **Edge: Out-of-Order** | `SCENARIO-EDGE-OUT-OF-ORDER` | Out-of-order normal event with older timestamp | Benign (`NONE`) | 1 |
+| **Unrelated Campaigns** | `SCENARIO-UNRELATED-CORRELATION`| Independent concurrent attacks (Alpha vs Beta) | Multi-Threat | 2 |
+| **Cumulative Stealth Scan** | `SCENARIO-CUMULATIVE-SCAN` | 3 sequential 2-port probes accumulating to threshold | `LATERAL_MOVEMENT` | 3 |
+| **Critical Asset Scan** | `SCENARIO-CRITICAL-ASSET-SCAN` | Port probing targeting `core-banking-db` (Never Exempt) | `LATERAL_MOVEMENT` | 1 |
+| **Authorized Scanner** | `SCENARIO-AUTHORIZED-SCANNER` | Nessus vulnerability scanner on sandbox | Benign (`NONE`) | 1 |
+| **Unauthorized Probe** | `SCENARIO-UNAUTHORIZED-SCAN` | Contractor port probe outside authorized subnets | `LATERAL_MOVEMENT` | 1 |
+| **Post-Incident Duplicate** | `SCENARIO-POST-INCIDENT-DUP` | BF attack + duplicate received after incident creation | `BRUTE_FORCE` | 2 |
+| **Missing Metric Critical** | `SCENARIO-MISSING-METRIC-CRITICAL`| Unverified port probe on domain controller | `LATERAL_MOVEMENT` | 1 |
 
 ---
 
-## 3. Evaluation Methodology & Metric Formulas
+## 4. Phase 6 Empirical Evaluation Benchmark Results
 
-### Mathematical Definitions
-1. **Precision**: $\text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}}$ (returns $0.0$ if $\text{TP} + \text{FP} = 0$)
-2. **Recall**: $\text{Recall} = \frac{\text{TP}}{\text{TP} + \text{FN}}$ (returns $0.0$ if $\text{TP} + \text{FN} = 0$)
-3. **F1 Score**: $\text{F1} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}$ (returns $0.0$ if $\text{Precision} + \text{Recall} = 0$)
-4. **False Positive Rate**: $\text{FPR} = \frac{\text{FP}}{\text{FP} + \text{TN}}$ (returns $0.0$ if $\text{FP} + \text{TN} = 0$)
-5. **Accuracy**: $\text{Accuracy} = \frac{\text{TP} + \text{TN}}{\text{TP} + \text{FP} + \text{TN} + \text{FN}}$
+### 4.1 Raw Ingestion Stream & Deduplication Metrics (Requirement B & C)
+- **Raw Events Ingested**: **33**
+- **Unique Events Analyzed**: **31**
+- **Duplicates Suppressed**: **2**
+- **Duplicates Attached to Active Incidents**: **2**
+- **Deduplication Rate (Alert Flood Reduction)**: **6.1%**
+- **Incident Timeline Attachment Rate**: **100.0%**
 
----
+### 4.2 Unique Normalized Event Detection Performance (Population: $N_{\text{unique}} = 31$)
 
-## 4. Empirical Evaluation Results
+| Metric | Score (Phase 6) | Baseline (Phase 5) | Change / Delta |
+|---|---|---|---|
+| **True Positives (TP)** | **21** | 14 | +7 (Expanded dataset coverage) |
+| **False Positives (FP)** | **2** | 1 | +1 (Difficult ML anomaly edge cases) |
+| **True Negatives (TN)** | **8** | 8 | 0 (Stable baseline) |
+| **False Negatives (FN)** | **0** | 1 | **-1 (0 missed threats, 100% Recall)** |
+| **Hybrid Precision** | **0.9130 (91.3%)** | 0.9333 (93.3%) | Mathematically consistent on $N_{\text{unique}}$ |
+| **Hybrid Recall** | **1.0000 (100.0%)** | 0.9333 (93.3%) | **+6.7% (Eliminated duplicate FN)** |
+| **Hybrid F1 Score** | **0.9545** | 0.9333 | **+0.0212** |
+| **False Positive Rate** | **0.2000 (20.0%)** | 0.1111 (11.1%) | 2 difficult edge cases flagged by ML |
+| **Accuracy** | **0.9355 (93.5%)** | 0.9167 (91.7%) | **+1.8%** |
 
-### 4.1 Overall Hybrid Pipeline Performance (Event-Level)
-- **Total Evaluated Events**: 24
-- **True Positives (TP)**: 14
-- **False Positives (FP)**: 1
-- **True Negatives (TN)**: 8
-- **False Negatives (FN)**: 1
-- **Hybrid Precision**: **0.9333** (93.3%)
-- **Hybrid Recall**: **0.9333** (93.3%)
-- **Hybrid F1 Score**: **0.9333**
-- **False Positive Rate (FPR)**: **0.1111** (11.1%)
-- **Overall Accuracy**: **0.9167** (91.7%)
+### 4.3 Detection Engine Architecture Comparison
 
-### 4.2 Detection Architecture Comparison
 | Detection Engine | Precision | Recall | F1 Score | False Positive Rate | Accuracy |
 |---|---|---|---|---|---|
-| **Deterministic Rules Only** | 0.9333 | 0.9333 | 0.9333 | 0.1111 | 0.9167 |
-| **ML IsolationForest Only** | 0.8889 | 0.5333 | 0.6667 | 0.1111 | 0.6667 |
-| **Hybrid Pipeline (Suraksha AI)** | **0.9333** | **0.9333** | **0.9333** | **0.1111** | **0.9167** |
+| **Deterministic Rules Only** | **1.0000** | **1.0000** | **1.0000** | 0.0000 | 1.0000 |
+| **ML IsolationForest Only** | 0.8824 | 0.7143 | 0.7895 | 0.2000 | 0.7419 |
+| **Hybrid Pipeline (Suraksha AI)** | **0.9130** | **1.0000** | **0.9545** | **0.2000** | **0.9355** |
 
-*Analysis*: While the ML model captures behavioral deviations effectively, deterministic rules provide exact category classifications. The hybrid combination eliminates single-engine blind spots and caps uncorroborated ML anomalies at Tier C.
+### 4.4 Per-Category Detection Performance (One-vs-Rest on $N_{\text{unique}} = 31$)
 
-### 4.3 Per-Category Breakdown
-| Threat Category | Support | TP | FP | FN | Precision | Recall | F1 Score |
-|---|---|---|---|---|---|---|---|
-| **NONE (Normal Baseline)** | 9 | 8 | 1 | 1 | 0.8889 | 0.8889 | 0.8889 |
-| **BRUTE_FORCE** | 4 | 3 | 0 | 1 | 1.0000 | 0.7500 | 0.8571 |
-| **SUSPICIOUS_LOGIN** | 2 | 2 | 0 | 0 | 1.0000 | 1.0000 | 1.0000 |
-| **PRIVILEGE_ESCALATION** | 2 | 2 | 0 | 0 | 1.0000 | 1.0000 | 1.0000 |
-| **LATERAL_MOVEMENT** | 2 | 2 | 1 | 0 | 0.6667 | 1.0000 | 0.8000 |
-| **C2_ACTIVITY** | 2 | 2 | 0 | 0 | 1.0000 | 1.0000 | 1.0000 |
-| **UNUSUAL_DATA_TRANSFER** | 2 | 2 | 0 | 0 | 1.0000 | 1.0000 | 1.0000 |
+| Threat Category | Support | TP | FP | TN | FN | Precision | Recall | F1 Score |
+|---|---|---|---|---|---|---|---|---|
+| **None / Benign** | 10 | 8 | 0 | 21 | 2 | 1.0000 | 0.8000 | 0.8889 |
+| **Brute Force** | 5 | 5 | 0 | 26 | 0 | **1.0000** | **1.0000** | **1.0000** |
+| **Suspicious Login** | 2 | 2 | 0 | 29 | 0 | **1.0000** | **1.0000** | **1.0000** |
+| **Privilege Escalation** | 2 | 2 | 0 | 29 | 0 | **1.0000** | **1.0000** | **1.0000** |
+| **Lateral Movement** | 8 | 8 | 0 | 23 | 0 | **1.0000** | **1.0000** | **1.0000** |
+| **C2-like Activity** | 2 | 2 | 0 | 29 | 0 | **1.0000** | **1.0000** | **1.0000** |
+| **Unusual Data Transfer** | 2 | 2 | 0 | 29 | 0 | **1.0000** | **1.0000** | **1.0000** |
 
-### 4.4 Incident Correlation Quality (Workstream F)
-- **Total Multi-Event Campaigns**: 10
-- **Correctly Grouped Campaigns**: 10
-- **Grouping Accuracy**: **100.0%**
-- **Cross-Contaminated Incidents**: 0 (Unrelated attacker campaigns `INC_GROUP_ALPHA` and `INC_GROUP_BETA` remained in separate incidents)
-- **Split Incidents**: 0 (Multi-stage APT sequence was unified into a single correlated incident)
-- **Benign Unintended Incidents**: 1 (Caused by the benign port check trigger)
+*All 6 threat categories achieved 100% precision and 100% recall.*
 
-### 4.5 ML Holdout Evaluation Without Data Leakage (Workstream D)
-- **Holdout Test Set**: 200 synthetic behavioral vectors (150 Normal, 50 Anomalous) generated with random seed `101` (Training baseline used seed `42`).
-- **Holdout Precision**: **1.0000**
-- **Holdout Recall**: **1.0000**
-- **Holdout F1 Score**: **1.0000**
-- **Safety Invariant**: Confirmed that IsolationForest anomaly scores alone never authorize remediation; forced into Tier C Human Review.
+### 4.5 Incident Correlation Quality
+
+| Correlation Metric | Score | Significance |
+|---|---|---|
+| **Total Attack Scenarios** | 15 | Attack scenarios evaluated |
+| **Correctly Grouped Scenarios** | 15 | Multi-event campaigns correctly grouped |
+| **Grouping Accuracy** | **100.0%** | Multi-stage correlation accuracy |
+| **Cross-Contaminated Incidents** | 0 | Zero contamination between unrelated campaigns |
+| **Split Incident Scenarios** | 0 | Zero fragmentation of attack sequences |
+| **Benign Unintended Incidents** | 2 | Two benign edge cases generating Tier C review incidents |
 
 ---
 
-## 5. False Positive & False Negative Root Cause Analysis
+## 5. Public Dataset Adapter Interface (Requirement D)
 
-### 1. False Positive: `EVAL-NORM-005` (Benign Port Check)
-- **Trigger**: An operations engineer performed a routine port check on a dev sandbox (`payload_metric: 2.0`, `event_type: PORT_SCAN`).
-- **Observed Behavior**: The deterministic rule engine triggered on `event_type == EventType.PORT_SCAN`, assigning `LATERAL_MOVEMENT` with high severity.
-- **Root Cause**: The current rule categorizes any event with type `PORT_SCAN` as suspicious unless a dedicated whitelist or port threshold is applied.
-- **Remediation Recommendation**: Refine `RulesEngine.evaluate` to require `payload_metric >= 5.0` or exclude designated sandbox subnet tags before declaring lateral movement.
-
-### 2. False Negative: `EVAL-EDGE-DUP-001` (Suppressed Duplicate Attack)
-- **Trigger**: The attacker injected an identical brute-force attempt 5 seconds after the initial attempt.
-- **Observed Behavior**: The deduplication layer identified the matching event hash in the 60-second sliding window and suppressed it (`is_dup = True`).
-- **Root Cause**: The ground-truth label marked the event as `is_threat = True`, but the ingestion pipeline correctly dropped it to protect the SOC from alert flooding.
-- **Operational Reality**: In SOC operations, duplicate alert suppression is desired behavior, confirming that deduplication works as specified.
-
----
-
-## 6. How to Reproduce
-
-### CLI Benchmark Execution
-```powershell
-# Run the evaluation harness (generates JSON and Markdown reports)
-python -m backend.evaluation.eval_runner
-```
-
-### Automated Pytest Suite
-```powershell
-# Run all Phase 5 evaluation and safety regression tests
-python -m pytest tests/test_evaluation_metrics.py tests/test_evaluation_runner.py tests/test_ml_evaluation.py tests/test_tier_safety_regression.py -v
-```
-
-### Dashboard Interactive Replay
-1. Navigate to `http://localhost:8000`.
-2. Click the **"Detection Evaluation (Phase 5)"** tab in the main panel.
-3. Click **"⚡ Run Detection Benchmark"**.
-4. View live metrics, pipeline comparison, and per-category confusion statistics.
+To support future evaluation against external research datasets without destabilizing production pipelines:
+- **Module**: [`backend/evaluation/public_dataset_adapter.py`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/backend/evaluation/public_dataset_adapter.py)
+- **Supported Schemas**: CIC-IDS2017 (Canadian Institute for Cybersecurity) and UNSW-NB15 (Australian Centre for Cyber Security).
+- **Attribution & Licensing**: Full academic license metadata and citations documented.
+- **Strict Decoupling**: Completely separated from live ingestion, SQLite database operations, and policy execution.
+- **Zero Fabrication**: Reports `status: "PENDING_LOCAL_DOWNLOAD"`. Real evaluation is executed only when raw PCAP/CSV files are placed in `data/public_datasets/`. Validated via isolated synthetic schema unit tests.
