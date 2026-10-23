@@ -122,8 +122,12 @@ def validate_evaluation_report(report: Dict[str, Any]) -> Tuple[bool, List[str]]
     # 3. Validate category support total
     per_cat = report.get("per_category_metrics", {})
     cat_supports = [details.get("support", 0) for details in per_cat.values()]
-    # In unique events, sum of threat category supports equals TP + FN
-    if cm and "tp" in cm and "fn" in cm:
+    has_none_cat = any("NONE" in k.upper() or "BENIGN" in k.upper() for k in per_cat.keys())
+
+    if has_none_cat:
+        if sum(cat_supports) != uniq_n:
+            errors.append(f"Category support sum mismatch: sum({sum(cat_supports)}) != total unique events ({uniq_n})")
+    elif cm and "tp" in cm and "fn" in cm:
         total_threats = cm["tp"] + cm["fn"]
         if sum(cat_supports) != total_threats:
             errors.append(f"Category support sum mismatch: sum({sum(cat_supports)}) != total threats ({total_threats})")

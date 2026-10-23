@@ -1,12 +1,15 @@
 {
   "evaluation_metadata": {
-    "timestamp": "2026-10-23T10:27:52.860867+00:00",
-    "framework": "Spec-Driven Development (Phase 6 SDD: Precision Tuning, Deduplication Observability & Evaluation Hardening)",
+    "timestamp": "2026-10-23T10:41:24.646433+00:00",
+    "framework": "Spec-Driven Development (Phase 7 SDD: External Dataset Validation, Timestamp Resilience, Distributed Correlation & Metric Integrity)",
     "dataset_path": "data/evaluation_dataset.json",
+    "dataset_identity": "Synthetic-Hardened-Multi-Scenario-v7",
     "total_raw_events": 33,
     "total_unique_events_analyzed": 31,
     "total_duplicates_suppressed": 2,
-    "isolated_db_path": "C:\\Users\\NAKSHA~1\\AppData\\Local\\Temp\\tmpmh7se0u3_eval.db"
+    "isolated_db_path": "C:\\Users\\NAKSHA~1\\AppData\\Local\\Temp\\tmp15kjhw_s_eval.db",
+    "public_dataset_status": "PENDING_LOCAL_DATA",
+    "validation_passed": true
   },
   "raw_stream_deduplication_metrics": {
     "raw_events_received": 33,
@@ -21,16 +24,18 @@
     "evaluation_unit": "Unique Normalized Event (Population: N_unique = N_raw - N_dup)",
     "confusion_matrix": {
       "tp": 21,
-      "fp": 2,
-      "tn": 8,
+      "fp": 0,
+      "tn": 10,
       "fn": 0
     },
     "metrics": {
-      "precision": 0.913,
+      "precision": 1.0,
       "recall": 1.0,
-      "f1_score": 0.9545,
-      "false_positive_rate": 0.2,
-      "accuracy": 0.9355
+      "specificity": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0
     }
   },
   "pipeline_comparison": {
@@ -44,56 +49,64 @@
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
+        "specificity": 1.0,
         "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 1.0
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       }
     },
     "ml_only": {
       "confusion_matrix": {
-        "tp": 15,
-        "fp": 2,
-        "tn": 8,
-        "fn": 6
+        "tp": 10,
+        "fp": 0,
+        "tn": 10,
+        "fn": 11
       },
       "metrics": {
-        "precision": 0.8824,
-        "recall": 0.7143,
-        "f1_score": 0.7895,
-        "false_positive_rate": 0.2,
-        "accuracy": 0.7419
+        "precision": 1.0,
+        "recall": 0.4762,
+        "specificity": 1.0,
+        "f1_score": 0.6452,
+        "false_positive_rate": 0.0,
+        "accuracy": 0.6452,
+        "balanced_accuracy": 0.7381
       }
     },
     "hybrid_pipeline": {
       "confusion_matrix": {
         "tp": 21,
-        "fp": 2,
-        "tn": 8,
+        "fp": 0,
+        "tn": 10,
         "fn": 0
       },
       "metrics": {
-        "precision": 0.913,
+        "precision": 1.0,
         "recall": 1.0,
-        "f1_score": 0.9545,
-        "false_positive_rate": 0.2,
-        "accuracy": 0.9355
+        "specificity": 1.0,
+        "f1_score": 1.0,
+        "false_positive_rate": 0.0,
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       }
     }
   },
   "per_category_metrics": {
     "None / Benign": {
       "confusion_matrix": {
-        "tp": 8,
+        "tp": 10,
         "fp": 0,
         "tn": 21,
-        "fn": 2
+        "fn": 0
       },
       "metrics": {
         "precision": 1.0,
-        "recall": 0.8,
-        "f1_score": 0.8889,
+        "recall": 1.0,
+        "specificity": 1.0,
+        "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 0.9355
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       },
       "support": 10
     },
@@ -107,9 +120,11 @@
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
+        "specificity": 1.0,
         "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 1.0
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       },
       "support": 5
     },
@@ -123,9 +138,11 @@
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
+        "specificity": 1.0,
         "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 1.0
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       },
       "support": 2
     },
@@ -139,9 +156,11 @@
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
+        "specificity": 1.0,
         "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 1.0
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       },
       "support": 2
     },
@@ -155,9 +174,11 @@
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
+        "specificity": 1.0,
         "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 1.0
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       },
       "support": 8
     },
@@ -171,9 +192,11 @@
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
+        "specificity": 1.0,
         "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 1.0
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       },
       "support": 2
     },
@@ -187,9 +210,11 @@
       "metrics": {
         "precision": 1.0,
         "recall": 1.0,
+        "specificity": 1.0,
         "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 1.0
+        "accuracy": 1.0,
+        "balanced_accuracy": 1.0
       },
       "support": 2
     }
@@ -200,7 +225,7 @@
     "split_scenarios_count": 0,
     "cross_contaminated_incidents_count": 0,
     "grouping_accuracy": 1.0,
-    "benign_unintended_incidents": 2,
+    "benign_unintended_incidents": 0,
     "threats_missing_incidents": 0
   },
   "ml_holdout_evaluation": {
@@ -221,19 +246,21 @@
     "metrics": {
       "precision": 1.0,
       "recall": 1.0,
+      "specificity": 1.0,
       "f1_score": 1.0,
       "false_positive_rate": 0.0,
-      "accuracy": 1.0
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0
     },
     "safety_invariant": "ML anomaly score alone NEVER authorizes remediation; fails closed to Tier C Human Review."
   },
   "risk_and_explainability_evaluation": {
-    "total_evaluated_threats": 23,
+    "total_evaluated_threats": 21,
     "risk_bounds_invariant_passed": true,
     "explainable_evidence_present": true,
     "min_risk_observed": 5.0,
     "max_risk_observed": 100.0,
-    "min_confidence_observed": 0.63,
+    "min_confidence_observed": 0.6,
     "max_confidence_observed": 0.95
   },
   "safety_controls_verified": {

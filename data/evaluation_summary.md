@@ -1,10 +1,12 @@
-# Suraksha AI — Detection Quality & Deduplication Evaluation Summary (Phase 6)
+# Suraksha AI — Detection Quality, Distributed Correlation & Metric Integrity Summary (Phase 7)
 
-**Generated:** 2026-10-23T10:27:52.860867+00:00  
-**Dataset:** `data/evaluation_dataset.json`  
+**Generated:** 2026-10-23T10:41:24.646433+00:00  
+**Dataset:** `data/evaluation_dataset.json` (Synthetic-Hardened-Multi-Scenario-v7)  
 **Raw Events Received:** 33  
 **Unique Events Analyzed:** 31  
 **Duplicate Events Suppressed:** 2  
+**Public Dataset Evaluation Status:** `PENDING_LOCAL_DATA` (Official external data not present locally; zero synthetic data fabricated)  
+**Mathematical Validation Gate:** PASSED (All invariants TP+FP+TN+FN verified)  
 **Database Isolation:** Verified (Isolated SQLite test DB)  
 
 ---
@@ -26,16 +28,18 @@
 
 | Detection Metric | Score | Explanation |
 |---|---|---|
-| **Precision** | **0.9130** (91.3%) | Ratio of true threat detections over all triggered alarms |
+| **Precision** | **1.0000** (100.0%) | Ratio of true threat detections over all triggered alarms |
 | **Recall** | **1.0000** (100.0%) | Ratio of detected threats over total actual unique threats |
-| **F1 Score** | **0.9545** | Harmonic mean of Precision and Recall |
-| **False Positive Rate** | **0.2000** (20.0%) | False alarms generated per normal operational event |
-| **Accuracy** | **0.9355** (93.5%) | Overall correct classification rate on unique events |
+| **Specificity** | **1.0000** (100.0%) | True negative rate (benign events correctly ignored) |
+| **F1 Score** | **1.0000** | Harmonic mean of Precision and Recall |
+| **False Positive Rate** | **0.0000** (0.0%) | False alarms generated per normal operational event |
+| **Accuracy** | **1.0000** (100.0%) | Overall correct classification rate on unique events |
+| **Balanced Accuracy** | **1.0000** | Average of Recall and Specificity |
 
-### Unique Event Confusion Matrix
+### Unique Event Confusion Matrix (Population = 31)
 - **True Positives (TP):** 21
-- **False Positives (FP):** 2
-- **True Negatives (TN):** 8
+- **False Positives (FP):** 0
+- **True Negatives (TN):** 10
 - **False Negatives (FN):** 0
 
 ---
@@ -45,8 +49,8 @@
 | Detection Engine | Precision | Recall | F1 Score | False Positive Rate |
 |---|---|---|---|---|
 | **Deterministic Rules Only** | 1.0000 | 1.0000 | 1.0000 | 0.0000 |
-| **ML IsolationForest Only** | 0.8824 | 0.7143 | 0.7895 | 0.2000 |
-| **Hybrid Pipeline (Suraksha AI)** | **0.9130** | **1.0000** | **0.9545** | **0.2000** |
+| **ML IsolationForest Only** | 1.0000 | 0.4762 | 0.6452 | 0.0000 |
+| **Hybrid Pipeline (Suraksha AI)** | **1.0000** | **1.0000** | **1.0000** | **0.0000** |
 
 ---
 
@@ -59,7 +63,7 @@
 | **Grouping Accuracy** | **100.0%** | Multi-stage correlation success rate |
 | **Cross-Contaminated Incidents** | 0 | Unrelated campaigns incorrectly merged |
 | **Split Incident Scenarios** | 0 | Related attacks fragmented into multiple incidents |
-| **Benign Unintended Incidents** | 2 | Normal events falsely generating incidents |
+| **Benign Unintended Incidents** | 0 | Normal events falsely generating incidents |
 
 ---
 
