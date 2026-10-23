@@ -204,6 +204,9 @@
                     <button class="tab-btn" onclick="switchTab('auditTab')">
                         <i class="fa-solid fa-file-signature"></i> Audit Trail (SQLite)
                     </button>
+                    <button class="tab-btn" onclick="switchTab('evalTab')">
+                        <i class="fa-solid fa-chart-line"></i> Detection Evaluation (Phase 5)
+                    </button>
                 </div>
 
                 <!-- Tab 1: Incidents Queue -->
@@ -283,6 +286,82 @@
                                 <tr><td colspan="6" class="empty-td">Loading audit log...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Detection Quality Evaluation (Phase 5) -->
+                <div class="tab-content" id="evalTab">
+                    <div class="eval-header-strip">
+                        <div class="eval-info">
+                            <span class="eval-badge"><i class="fa-solid fa-flask"></i> SYNTHETIC BENCHMARK EVALUATION (OFFLINE FIXTURE)</span>
+                            <p class="eval-desc">Evaluates event-level hybrid detection, multi-event correlation, and explainable evidence using isolated database testing without altering live incidents.</p>
+                        </div>
+                        <button class="run-eval-btn" id="runEvalBtn" onclick="triggerEvaluationBenchmark()">
+                            <i class="fa-solid fa-play"></i> Run Detection Benchmark
+                        </button>
+                    </div>
+
+                    <div class="eval-metrics-grid">
+                        <div class="eval-stat-card">
+                            <span class="stat-num text-cyan" id="evalPrecision">--</span>
+                            <span class="stat-lbl">Hybrid Precision</span>
+                        </div>
+                        <div class="eval-stat-card">
+                            <span class="stat-num text-emerald" id="evalRecall">--</span>
+                            <span class="stat-lbl">Hybrid Recall</span>
+                        </div>
+                        <div class="eval-stat-card">
+                            <span class="stat-num text-purple" id="evalF1">--</span>
+                            <span class="stat-lbl">F1 Score</span>
+                        </div>
+                        <div class="eval-stat-card">
+                            <span class="stat-num text-amber" id="evalCorrelationAcc">--</span>
+                            <span class="stat-lbl">Correlation Accuracy</span>
+                        </div>
+                    </div>
+
+                    <div class="eval-sub-section">
+                        <h4><i class="fa-solid fa-code-compare"></i> Detection Engine Comparison (Rules vs ML vs Hybrid)</h4>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Detection Architecture</th>
+                                        <th>Precision</th>
+                                        <th>Recall</th>
+                                        <th>F1 Score</th>
+                                        <th>False Positive Rate</th>
+                                        <th>Accuracy</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pipelineComparisonTbody">
+                                    <tr><td colspan="6" class="empty-td">Click "Run Detection Benchmark" to load metrics.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="eval-sub-section">
+                        <h4><i class="fa-solid fa-layer-group"></i> Per-Category Detection Performance</h4>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Threat Category</th>
+                                        <th>Support (Events)</th>
+                                        <th>True Positives</th>
+                                        <th>False Positives</th>
+                                        <th>False Negatives</th>
+                                        <th>Precision</th>
+                                        <th>Recall</th>
+                                        <th>F1 Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="perCategoryTbody">
+                                    <tr><td colspan="8" class="empty-td">Awaiting evaluation execution...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </main>

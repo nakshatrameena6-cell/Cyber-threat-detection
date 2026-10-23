@@ -682,6 +682,46 @@ def inject_telemetry_stream():
     return {"total_stream_events": len(events), "processed_responses": responses}
 
 
+# --- Workstream H: Detection Quality Evaluation Endpoints ---
+
+@app.get("/api/evaluation/latest")
+def get_latest_evaluation_report():
+    """
+    Returns the latest Phase 5 Detection Quality Evaluation Report.
+    If no report exists, executes a fresh evaluation run.
+    """
+    report_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "evaluation_report.json")
+    if os.path.exists(report_path):
+        try:
+            with open(report_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    from backend.evaluation.eval_runner import run_evaluation
+    return run_evaluation()
+
+
+@app.post("/api/evaluation/run")
+def trigger_evaluation_run(
+    user_info: dict = Depends(require_role_permission("VIEW_AUDIT"))
+):
+    """
+    Executes a reproducible evaluation run in an isolated database environment
+    and returns the freshly computed metrics report.
+    """
+    from backend.evaluation.eval_runner import run_evaluation
+    report = run_evaluation()
+    audit_logger.log(
+        actor=user_info.get("user_id", "ANALYST"),
+        role=user_info.get("role", "ANALYST"),
+        action_category="EVALUATION",
+        description=f"Executed Phase 5 detection quality benchmark. Hybrid Precision: {report['overall_hybrid_metrics']['metrics']['precision']}, Recall: {report['overall_hybrid_metrics']['metrics']['recall']}",
+        target_resource="data/evaluation_report.json"
+    )
+    return report
+
+
 # Mount static frontend directory
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 if os.path.exists(frontend_path):

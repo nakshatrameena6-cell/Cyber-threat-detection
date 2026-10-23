@@ -44,6 +44,7 @@ function switchTab(tabId) {
 
     if (tabId === "auditTab") loadAuditLogs();
     if (tabId === "responseTab") loadResponses();
+    if (tabId === "evalTab") loadEvaluationReport();
 }
 
 // Load System State & Metrics
@@ -502,4 +503,103 @@ async function loadAuditLogs() {
     } catch (e) {
         console.error("Error loading audit logs:", e);
     }
+}
+
+// --- Phase 5: Detection Quality Evaluation UI Functions ---
+
+async function loadEvaluationReport() {
+    try {
+        const res = await fetch(`${API_BASE}/api/evaluation/latest`);
+        if (!res.ok) return;
+        const report = await res.json();
+        renderEvaluationReport(report);
+    } catch (e) {
+        console.error("Error loading evaluation report:", e);
+    }
+}
+
+async function triggerEvaluationBenchmark() {
+    const btn = document.getElementById("runEvalBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running Benchmark...';
+    try {
+        const res = await fetch(`${API_BASE}/api/evaluation/run`, {
+            method: "POST",
+            headers: {
+                "X-Role": "ADMIN",
+                "X-User-Id": "admin_eval"
+            }
+        });
+        const report = await res.json();
+        renderEvaluationReport(report);
+        alert("Detection Benchmark Complete! Report updated.");
+    } catch (e) {
+        alert("Error running benchmark: " + e);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-play"></i> Run Detection Benchmark';
+    }
+}
+
+function renderEvaluationReport(report) {
+    if (!report || !report.overall_hybrid_metrics) return;
+    const hybridM = report.overall_hybrid_metrics.metrics;
+    const corr = report.incident_correlation_evaluation;
+
+    document.getElementById("evalPrecision").innerText = (hybridM.precision * 100).toFixed(1) + "%";
+    document.getElementById("evalRecall").innerText = (hybridM.recall * 100).toFixed(1) + "%";
+    document.getElementById("evalF1").innerText = hybridM.f1_score.toFixed(4);
+    document.getElementById("evalCorrelationAcc").innerText = (corr.grouping_accuracy * 100).toFixed(1) + "%";
+
+    // Pipeline Comparison Table
+    const pipe = report.pipeline_comparison;
+    const compTbody = document.getElementById("pipelineComparisonTbody");
+    compTbody.innerHTML = `
+        <tr>
+            <td><strong>Deterministic Rules Only</strong></td>
+            <td>${(pipe.rules_only.metrics.precision * 100).toFixed(1)}%</td>
+            <td>${(pipe.rules_only.metrics.recall * 100).toFixed(1)}%</td>
+            <td>${pipe.rules_only.metrics.f1_score.toFixed(4)}</td>
+            <td>${(pipe.rules_only.metrics.false_positive_rate * 100).toFixed(1)}%</td>
+            <td>${(pipe.rules_only.metrics.accuracy * 100).toFixed(1)}%</td>
+        </tr>
+        <tr>
+            <td><strong>ML IsolationForest Only</strong></td>
+            <td>${(pipe.ml_only.metrics.precision * 100).toFixed(1)}%</td>
+            <td>${(pipe.ml_only.metrics.recall * 100).toFixed(1)}%</td>
+            <td>${pipe.ml_only.metrics.f1_score.toFixed(4)}</td>
+            <td>${(pipe.ml_only.metrics.false_positive_rate * 100).toFixed(1)}%</td>
+            <td>${(pipe.ml_only.metrics.accuracy * 100).toFixed(1)}%</td>
+        </tr>
+        <tr style="background: rgba(0, 242, 254, 0.08); font-weight: bold;">
+            <td><i class="fa-solid fa-star text-cyan"></i> <strong>Hybrid Pipeline (Suraksha AI)</strong></td>
+            <td class="text-cyan">${(hybridM.precision * 100).toFixed(1)}%</td>
+            <td class="text-emerald">${(hybridM.recall * 100).toFixed(1)}%</td>
+            <td class="text-purple">${hybridM.f1_score.toFixed(4)}</td>
+            <td>${(hybridM.false_positive_rate * 100).toFixed(1)}%</td>
+            <td>${(hybridM.accuracy * 100).toFixed(1)}%</td>
+        </tr>
+    `;
+
+    // Per-Category Breakdown
+    const perCat = report.per_category_metrics;
+    const perCatTbody = document.getElementById("perCategoryTbody");
+    let perCatHtml = "";
+    for (const [catName, catData] of Object.entries(perCat)) {
+        const cm = catData.confusion_matrix;
+        const m = catData.metrics;
+        perCatHtml += `
+            <tr>
+                <td><strong>${catName}</strong></td>
+                <td>${catData.support}</td>
+                <td><span class="text-emerald">${cm.tp}</span></td>
+                <td><span class="text-amber">${cm.fp}</span></td>
+                <td><span class="text-red">${cm.fn}</span></td>
+                <td>${(m.precision * 100).toFixed(1)}%</td>
+                <td>${(m.recall * 100).toFixed(1)}%</td>
+                <td>${m.f1_score.toFixed(4)}</td>
+            </tr>
+        `;
+    }
+    perCatTbody.innerHTML = perCatHtml;
 }

@@ -209,6 +209,9 @@ class DatabaseManager:
         self.db_path = db_path or get_db_path()
         init_db(self.db_path)
 
+    def initialize_db(self):
+        init_db(self.db_path)
+
     def get_conn(self) -> sqlite3.Connection:
         return get_db_connection(self.db_path)
 
