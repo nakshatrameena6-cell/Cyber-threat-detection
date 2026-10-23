@@ -1,6 +1,6 @@
 # Threat Model & Risk Analysis (THREAT_MODEL.md)
 
-## System: Suraksha AI (Phase 4 Security Analysis)
+## System: Suraksha AI (Phase 5 Security & Evaluation Threat Analysis)
 
 ## 1. Threat Categories & Detection Mapping
 
@@ -15,20 +15,27 @@
 
 ---
 
-## 2. STRIDE Threat Analysis (Phase 4 Hardened)
+## 2. STRIDE Threat Analysis (Phase 5 Hardened)
 
-| Threat Type | Potential Vulnerability / Attack Vector | Phase 4 Mitigation & Architecture Control |
+| Threat Type | Potential Vulnerability / Attack Vector | Phase 5 Mitigation & Architecture Control |
 |---|---|---|
-| **Spoofing** | Adversary sends fake telemetry or unauthorized webhook requests to distract analysts or exhaust resources. | 1. Generic webhook supports secret token verification (`X-Suraksha-Token`).<br>2. Optional UDP Syslog listener binds strictly to loopback (`127.0.0.1:5514`), preventing external network injection.<br>3. RBAC role verification on all state-altering endpoints (`ADMIN`, `ANALYST`, `AUDITOR`). |
-| **Tampering** | Adversary attempts to modify SQLite database rows, clear audit history, or alter incident timelines. | 1. Parameterized SQL queries prevent SQL injection.<br>2. Audit logger enforces append-only writing.<br>3. Gate 6 pre-execution safety check halts all response actions if database writes or audit logging fail.<br>4. *Note on Security Boundary*: SQLite is an application database running under host OS permissions. It is not an immutable hardware WORM device or cryptographically distributed ledger. Operating system file-level permissions must restrict SQLite database file access. |
-| **Repudiation** | Operator or adversary claims an automated action or approval was unauthorized or never occurred. | 1. Every response decision, pre-state capture, execution outcome, verification, and rollback writes an immutable audit record containing actor ID, role, target, and timestamp.<br>2. Fail-closed architecture prevents execution without prior audit log persistence. |
-| **Information Disclosure** | Unauthorized users access incident details, network topology, or secret webhook tokens. | 1. RBAC permissions restrict administrative endpoints.<br>2. Webhook secret tokens are read from environment variables (`SURAKSHA_WEBHOOK_SECRET`) and are never exposed in log files or error traces.<br>3. Stack traces are masked behind standard HTTP 400/500 responses. |
-| **Denial of Service (DoS)** | 1. Attacker spams duplicate events to flood correlation engine.<br>2. Attacker spoofing critical infrastructure IPs to trigger automated host isolation or IP blocking. | 1. Sliding window deduplication identifies and suppresses identical events.<br>2. Emergency Kill Switch instantly halts all automated remediation.<br>3. Blast Radius Gate limits concurrent active blocks/isolations to a maximum of 5.<br>4. Critical asset protection prevents automated isolation of core infrastructure.<br>5. High ML anomaly scores alone without deterministic evidence are capped at Tier C (human approval required). |
-| **Elevation of Privilege** | Low-privilege user (or compromised analyst account) executes high-impact response actions (e.g. `ISOLATE_ENDPOINT`). | 1. Tier C enforces mandatory human approval with verified `ADMIN` or `ANALYST` authorization.<br>2. Strict state machine prevents unauthorized incident lifecycle jumps. |
+| **Spoofing** | 1. Adversary injects fake telemetry to cover tracks or exhaust SOC analysts.<br>2. Adversary spoofs benchmark evaluation fixtures to falsify metrics. | 1. Generic webhook enforces secret token verification (`X-Suraksha-Token`).<br>2. UDP Syslog listener binds strictly to loopback `127.0.0.1:5514`.<br>3. Evaluation datasets feature immutable file hashes and schema validation. |
+| **Tampering** | 1. Adversary attempts to clear or modify SQLite audit records.<br>2. Adversary poisons evaluation dataset labels to hide low detection rates. | 1. Parameterized SQL queries prevent SQL injection.<br>2. Append-only audit logger raises exceptions on failure.<br>3. Pre-execution Gate 6 halts response execution if database writes fail.<br>4. Evaluation benchmark runs in an isolated database environment, preventing test tampering of live operational data. |
+| **Repudiation** | Operator denies approving a response action or tampering with benchmark metrics. | 1. All manual approvals, rollbacks, and benchmark runs log actor ID, role, timestamp, and details into the append-only SQLite audit table.<br>2. Benchmark reports record UTC generation timestamps and dataset file paths. |
+| **Information Disclosure** | Unauthorized users view restricted incidents, topologies, or benchmark holdout data. | 1. Strict RBAC checking (`ADMIN`, `ANALYST`, `AUDITOR`).<br>2. Webhook secret tokens are read from environment variables and never logged.<br>3. Public API responses mask stack traces behind structured HTTP 400/500 errors. |
+| **Denial of Service (DoS)** | 1. Attacker spams duplicate events to flood correlation engine.<br>2. Attacker triggers automated response runaway on critical internal hosts.<br>3. Benchmark execution exhausts server CPU or locks database. | 1. Sliding window deduplication suppresses identical events.<br>2. Emergency Kill Switch halts automated responses immediately.<br>3. Blast Radius Gate restricts active blocks to $\le 5$.<br>4. Critical asset protection prevents destructive isolation of core servers.<br>5. ML anomaly scores alone are capped at Tier C (human approval required).<br>6. Benchmark runs operate in isolated temporary databases without table locking on `data/suraksha.db`. |
+| **Elevation of Privilege** | Low-privilege user executes high-impact response actions (e.g., `ISOLATE_ENDPOINT`). | 1. Tier C enforces mandatory human approval with verified `ADMIN` or `ANALYST` authorization.<br>2. Strict state machine prevents unauthorized incident lifecycle jumps. |
 
 ---
 
-## 3. Operational Security Boundaries
+## 3. Machine Learning Security & Data Leakage Invariants
 
-1. **Simulated Execution**: All remediation actions (`BLOCK_IP`, `SUSPEND_SESSION`, `ISOLATE_ENDPOINT`) operate on simulated firewall/network state objects in-memory and in SQLite. No modifications to real host operating system network adapters, iptables, or Windows Firewall rules are performed.
-2. **Persistence Boundary**: The SQLite database provides crash-resilient application persistence. It protects against application restarts and transient runtime failures. Host-level access control, full disk encryption, and periodic external backups are recommended for enterprise production deployment.
+1. **Zero Data Leakage Invariant**:
+   - The Scikit-Learn `IsolationForest` model is trained on synthetic baseline behavioral vectors using random seed `42`.
+   - The holdout evaluation dataset ([`backend/evaluation/ml_evaluator.py`](file:///c:/Users/NAKSHATRA%20SV/OneDrive/Documents/Cyber-threat-detection/backend/evaluation/ml_evaluator.py)) uses a completely distinct random seed (`101`) and sample space (200 holdout samples) to ensure zero data leakage between training and testing.
+2. **Safety Override Invariant**:
+   - An ML anomaly score alone—regardless of magnitude—**must never authorize an automated response action**.
+   - If an event is flagged as anomalous without deterministic rule confirmation, it is strictly classified as Tier C (`ActionStatus.PENDING_APPROVAL`), requiring human analyst review.
+3. **Operational Persistence Boundary**:
+   - SQLite provides persistent application relational storage for crash resiliency.
+   - SQLite is not a tamper-proof hardware WORM device or cryptographically distributed ledger. Operating system file-level permissions must protect the `data/suraksha.db` file.

@@ -704,7 +704,7 @@ def get_latest_evaluation_report():
 
 @app.post("/api/evaluation/run")
 def trigger_evaluation_run(
-    user_info: dict = Depends(require_role_permission("VIEW_AUDIT"))
+    user_info: dict = Depends(require_role_permission("VIEW_AUDIT_LOGS"))
 ):
     """
     Executes a reproducible evaluation run in an isolated database environment

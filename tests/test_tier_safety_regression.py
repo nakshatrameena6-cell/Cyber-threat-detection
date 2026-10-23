@@ -67,19 +67,24 @@ def test_tier_c_low_confidence_fails_closed():
     assert auto is False
     assert "low confidence" in reason.lower()
 
-def test_evaluation_api_endpoints(test_client):
+from fastapi.testclient import TestClient
+from backend.main import app
+
+client = TestClient(app)
+
+def test_evaluation_api_endpoints():
     """
     REQ-EVAL-008: Verify /api/evaluation/latest and /api/evaluation/run endpoints.
     """
     # 1. Latest report endpoint
-    res = test_client.get("/api/evaluation/latest")
+    res = client.get("/api/evaluation/latest")
     assert res.status_code == 200
     report = res.json()
     assert "overall_hybrid_metrics" in report
     assert "incident_correlation_evaluation" in report
 
     # 2. Trigger run endpoint
-    res2 = test_client.post("/api/evaluation/run", headers={"X-Role": "ADMIN", "X-User-Id": "test_admin"})
+    res2 = client.post("/api/evaluation/run", headers={"X-Role": "ADMIN", "X-User-Id": "test_admin"})
     assert res2.status_code == 200
     report2 = res2.json()
     assert "overall_hybrid_metrics" in report2

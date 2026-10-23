@@ -42,13 +42,18 @@ class RBACManager:
             return False
         return required_permission in ROLE_PERMISSIONS.get(role, set())
 
-def require_role_permission(permission: str, x_user_role: str = Header(default="ANALYST"), x_user_id: str = Header(default="demo_user")):
+def require_role_permission(permission: str):
     """
     FastAPI Dependency checking RBAC authorization header.
     """
-    if not RBACManager.verify_permission(x_user_role, permission):
-        raise HTTPException(
-            status_code=403,
-            detail=f"Forbidden: Role '{x_user_role}' lacks required permission '{permission}'."
-        )
-    return {"user_id": x_user_id, "role": x_user_role}
+    def _dependency(
+        x_role: str = Header(default="ANALYST", alias="X-Role"),
+        x_user_id: str = Header(default="demo_user", alias="X-User-Id")
+    ):
+        if not RBACManager.verify_permission(x_role, permission):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Forbidden: Role '{x_role}' lacks required permission '{permission}'."
+            )
+        return {"user_id": x_user_id, "role": x_role}
+    return _dependency
