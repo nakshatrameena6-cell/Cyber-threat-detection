@@ -1,13 +1,13 @@
 {
   "evaluation_metadata": {
-    "timestamp": "2026-10-23T10:47:52.570806+00:00",
+    "timestamp": "2026-10-23T10:48:34.726046+00:00",
     "framework": "Spec-Driven Development (Phase 7 SDD: External Dataset Validation, Timestamp Resilience, Distributed Correlation & Metric Integrity)",
     "dataset_path": "data/evaluation_dataset.json",
     "dataset_identity": "Synthetic-Hardened-Multi-Scenario-v7",
     "total_raw_events": 33,
     "total_unique_events_analyzed": 29,
     "total_duplicates_suppressed": 4,
-    "isolated_db_path": "C:\\Users\\NAKSHA~1\\AppData\\Local\\Temp\\tmpm59nvv2w_eval.db",
+    "isolated_db_path": "C:\\Users\\NAKSHA~1\\AppData\\Local\\Temp\\tmp2d_ysio0_eval.db",
     "public_dataset_status": "PENDING_LOCAL_DATA",
     "validation_passed": true
   },

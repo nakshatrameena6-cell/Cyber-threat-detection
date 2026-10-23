@@ -11,12 +11,12 @@ from backend.incidents.manager import IncidentManager
 from backend.database import DatabaseManager
 
 
-def test_distributed_scan_same_ipv4_subnet_merges_with_common_target(isolated_db):
+def test_distributed_scan_same_ipv4_subnet_merges_with_common_target():
     """
     Verifies that multiple attacking IPs in the same /24 subnet (e.g. 198.51.100.10 and 198.51.100.11)
     targeting the same asset are successfully grouped into a unified incident with subnet why_evidence.
     """
-    mgr = IncidentManager(isolated_db)
+    mgr = IncidentManager()
     corr = IncidentCorrelationEngine(correlation_window_seconds=600.0, ipv4_cidr_prefix=24)
     now = datetime.now(timezone.utc).isoformat()
 
