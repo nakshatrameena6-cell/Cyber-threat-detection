@@ -187,8 +187,8 @@ def process_telemetry_pipeline(raw_dict: dict, actor: str = "SYSTEM", role: str 
     active_incidents = incident_manager.list_incidents()
     existing_incident = correlation_engine.find_correlatable_incident(norm_evt, active_incidents, threat_cat=threat_cat)
 
-    # If benign and low anomaly score, return early as normal operational traffic
-    if is_anomaly_only and ml_score < 0.65:
+    # If benign and low anomaly score AND no correlated active incident exists, return early
+    if is_anomaly_only and ml_score < 0.65 and not existing_incident:
         return IngestResponse(
             normalized_event=norm_evt,
             threat_detected=False,

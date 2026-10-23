@@ -414,7 +414,7 @@ class EvaluationRunner:
         ml_h = report["ml_holdout_evaluation"]["metrics"]
         stream_m = report["raw_stream_deduplication_metrics"]
 
-        md = f"""# Suraksha AI — Detection Quality, Distributed Correlation & Metric Integrity Summary (Phase 7)
+        md = f"""# Suraksha AI — Detection Quality, Distributed Correlation & Metric Integrity Summary (Phase 6 / Phase 7)
 
 **Generated:** {report['evaluation_metadata']['timestamp']}  
 **Dataset:** `{report['evaluation_metadata']['dataset_path']}` ({report['evaluation_metadata']['dataset_identity']})  

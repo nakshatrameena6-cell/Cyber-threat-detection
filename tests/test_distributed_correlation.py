@@ -67,9 +67,9 @@ def test_distributed_scan_same_ipv4_subnet_merges_with_common_target():
     assert "EVT-SRC2" in merged.related_events
 
 
-def test_distributed_attack_same_ipv6_subnet_merges(isolated_db):
+def test_distributed_attack_same_ipv6_subnet_merges():
     """Verifies that attacking hosts in the same /64 IPv6 prefix are correlated."""
-    mgr = IncidentManager(isolated_db)
+    mgr = IncidentManager()
     corr = IncidentCorrelationEngine(correlation_window_seconds=600.0, ipv6_cidr_prefix=64)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -105,13 +105,13 @@ def test_distributed_attack_same_ipv6_subnet_merges(isolated_db):
     assert found_inc.incident_id == inc.incident_id
 
 
-def test_unrelated_campaigns_in_same_subnet_do_not_merge(isolated_db):
+def test_unrelated_campaigns_in_same_subnet_do_not_merge():
     """
     Mandatory Safety Invariant: Two events from the same /24 subnet that target
     different assets, belong to different threat categories, and have different users
     represent UNRELATED activity and must NOT be accidentally merged.
     """
-    mgr = IncidentManager(isolated_db)
+    mgr = IncidentManager()
     corr = IncidentCorrelationEngine(correlation_window_seconds=600.0, ipv4_cidr_prefix=24)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -149,9 +149,9 @@ def test_unrelated_campaigns_in_same_subnet_do_not_merge(isolated_db):
     assert found_inc is None, "Accidentally merged unrelated campaigns sharing a subnet"
 
 
-def test_unrelated_benign_activity_in_same_subnet_never_merges(isolated_db):
+def test_unrelated_benign_activity_in_same_subnet_never_merges():
     """Verifies that benign traffic from a shared subnet never contaminates a malicious incident."""
-    mgr = IncidentManager(isolated_db)
+    mgr = IncidentManager()
     corr = IncidentCorrelationEngine(correlation_window_seconds=600.0, ipv4_cidr_prefix=24)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -188,9 +188,9 @@ def test_unrelated_benign_activity_in_same_subnet_never_merges(isolated_db):
     assert found_inc is None, "Benign event from shared subnet was incorrectly correlated to malware incident"
 
 
-def test_time_window_expiry_prevents_distributed_merge(isolated_db):
+def test_time_window_expiry_prevents_distributed_merge():
     """Verifies that events outside the correlation window (e.g. >10 minutes) do not merge."""
-    mgr = IncidentManager(isolated_db)
+    mgr = IncidentManager()
     corr = IncidentCorrelationEngine(correlation_window_seconds=600.0, ipv4_cidr_prefix=24)
     now_dt = datetime.now(timezone.utc)
 

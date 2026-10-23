@@ -12,31 +12,38 @@ from backend.detection.ml_detector import MLAnomalyDetector
 
 def test_standard_utc_timestamp_parsing():
     """Verifies that ISO-8601 UTC timestamps with 'Z' parse cleanly as TRUSTED."""
+    now = datetime.now(timezone.utc)
+    test_dt = (now - timedelta(seconds=15)).replace(microsecond=0)
+    raw_str = test_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     raw = {
         "raw_id": "TS-UTC-001",
-        "timestamp": "2026-10-23T14:30:00Z",
+        "timestamp": raw_str,
         "source_ip": "10.0.1.10",
         "user_id": "alice",
         "event_type": "AUTH_SUCCESS"
     }
     norm_evt, _ = EventNormalizer.normalize(raw)
-    assert norm_evt.timestamp == "2026-10-23T14:30:00+00:00"
+    assert norm_evt.timestamp == test_dt.isoformat()
     assert norm_evt.timestamp_quality == TimestampQuality.TRUSTED
     assert norm_evt.timestamp_fallback_reason is None
-    assert norm_evt.raw_timestamp == "2026-10-23T14:30:00Z"
+    assert norm_evt.raw_timestamp == raw_str
 
 
 def test_timezone_offset_normalized_to_utc():
     """Verifies that non-UTC timezone offsets (+05:30) are correctly converted to UTC representation."""
+    now = datetime.now(timezone.utc)
+    test_utc = (now - timedelta(seconds=20)).replace(microsecond=0)
+    tz_ist = timezone(timedelta(hours=5, minutes=30))
+    test_ist = test_utc.astimezone(tz_ist)
     raw = {
         "raw_id": "TS-OFFSET-001",
-        "timestamp": "2026-10-23T20:00:00+05:30", # Equivalent to 14:30:00 UTC
+        "timestamp": test_ist.isoformat(),
         "source_ip": "10.0.1.10",
         "user_id": "alice",
         "event_type": "AUTH_SUCCESS"
     }
     norm_evt, _ = EventNormalizer.normalize(raw)
-    assert norm_evt.timestamp == "2026-10-23T14:30:00+00:00"
+    assert norm_evt.timestamp == test_utc.isoformat()
     assert norm_evt.timestamp_quality == TimestampQuality.TRUSTED
 
 
