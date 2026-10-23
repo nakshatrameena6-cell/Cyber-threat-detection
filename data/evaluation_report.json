@@ -1,31 +1,31 @@
 {
   "evaluation_metadata": {
-    "timestamp": "2026-10-23T16:46:22.659793+00:00",
+    "timestamp": "2026-10-23T16:49:02.278141+00:00",
     "framework": "Spec-Driven Development (Phase 7 SDD: External Dataset Validation, Timestamp Resilience, Distributed Correlation & Metric Integrity)",
     "dataset_path": "data/evaluation_dataset.json",
     "dataset_identity": "Synthetic-Hardened-Multi-Scenario-v7",
     "total_raw_events": 33,
-    "total_unique_events_analyzed": 31,
-    "total_duplicates_suppressed": 2,
-    "isolated_db_path": "C:\\Users\\NAKSHA~1\\AppData\\Local\\Temp\\tmpa1123rlu_eval.db",
+    "total_unique_events_analyzed": 30,
+    "total_duplicates_suppressed": 3,
+    "isolated_db_path": "C:\\Users\\NAKSHA~1\\AppData\\Local\\Temp\\tmpqg1p76f8_eval.db",
     "public_dataset_status": "PENDING_LOCAL_DATA",
     "validation_passed": true
   },
   "raw_stream_deduplication_metrics": {
     "raw_events_received": 33,
-    "unique_events_analyzed": 31,
-    "duplicates_suppressed": 2,
+    "unique_events_analyzed": 30,
+    "duplicates_suppressed": 3,
     "duplicates_attached_to_incidents": 2,
-    "deduplication_rate_pct": 6.06,
-    "incident_timeline_attachment_rate_pct": 100.0,
-    "alert_flooding_reduction_pct": 6.06
+    "deduplication_rate_pct": 9.09,
+    "incident_timeline_attachment_rate_pct": 66.67,
+    "alert_flooding_reduction_pct": 9.09
   },
   "overall_hybrid_metrics": {
     "evaluation_unit": "Unique Normalized Event (Population: N_unique = N_raw - N_dup)",
     "confusion_matrix": {
       "tp": 21,
       "fp": 0,
-      "tn": 10,
+      "tn": 9,
       "fn": 0
     },
     "metrics": {
@@ -43,7 +43,7 @@
       "confusion_matrix": {
         "tp": 21,
         "fp": 0,
-        "tn": 10,
+        "tn": 9,
         "fn": 0
       },
       "metrics": {
@@ -60,7 +60,7 @@
       "confusion_matrix": {
         "tp": 10,
         "fp": 0,
-        "tn": 10,
+        "tn": 9,
         "fn": 11
       },
       "metrics": {
@@ -69,7 +69,7 @@
         "specificity": 1.0,
         "f1_score": 0.6452,
         "false_positive_rate": 0.0,
-        "accuracy": 0.6452,
+        "accuracy": 0.6333,
         "balanced_accuracy": 0.7381
       }
     },
@@ -77,7 +77,7 @@
       "confusion_matrix": {
         "tp": 21,
         "fp": 0,
-        "tn": 10,
+        "tn": 9,
         "fn": 0
       },
       "metrics": {
@@ -94,7 +94,7 @@
   "per_category_metrics": {
     "None / Benign": {
       "confusion_matrix": {
-        "tp": 10,
+        "tp": 9,
         "fp": 0,
         "tn": 21,
         "fn": 0
@@ -108,13 +108,13 @@
         "accuracy": 1.0,
         "balanced_accuracy": 1.0
       },
-      "support": 10
+      "support": 9
     },
     "Brute Force": {
       "confusion_matrix": {
         "tp": 5,
         "fp": 0,
-        "tn": 26,
+        "tn": 25,
         "fn": 0
       },
       "metrics": {
@@ -132,7 +132,7 @@
       "confusion_matrix": {
         "tp": 2,
         "fp": 0,
-        "tn": 29,
+        "tn": 28,
         "fn": 0
       },
       "metrics": {
@@ -150,7 +150,7 @@
       "confusion_matrix": {
         "tp": 2,
         "fp": 0,
-        "tn": 29,
+        "tn": 28,
         "fn": 0
       },
       "metrics": {
@@ -168,7 +168,7 @@
       "confusion_matrix": {
         "tp": 8,
         "fp": 0,
-        "tn": 23,
+        "tn": 22,
         "fn": 0
       },
       "metrics": {
@@ -186,7 +186,7 @@
       "confusion_matrix": {
         "tp": 2,
         "fp": 0,
-        "tn": 29,
+        "tn": 28,
         "fn": 0
       },
       "metrics": {
@@ -204,7 +204,7 @@
       "confusion_matrix": {
         "tp": 2,
         "fp": 0,
-        "tn": 29,
+        "tn": 28,
         "fn": 0
       },
       "metrics": {
