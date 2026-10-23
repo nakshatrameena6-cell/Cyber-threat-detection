@@ -1,6 +1,6 @@
 # Suraksha AI — Detection Quality, Distributed Correlation & Metric Integrity Summary (Phase 6 / Phase 7)
 
-**Generated:** 2026-10-23T17:26:18.340815+00:00  
+**Generated:** 2026-10-23T18:00:11.107131+00:00  
 **Dataset:** `data/evaluation_dataset.json` (Synthetic-Hardened-Multi-Scenario-v7)  
 **Raw Events Received:** 33  
 **Unique Events Analyzed:** 31  
