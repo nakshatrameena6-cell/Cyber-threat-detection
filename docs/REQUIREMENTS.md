@@ -1,8 +1,8 @@
 # Requirements Specification (REQUIREMENTS.md)
 
-**System:** Suraksha AI - Real-Time Ingestion, SQLite Persistence & Reliability Hardening  
+**System:** Suraksha AI - Detection Quality Evaluation, Attack Replay & False-Positive Analysis  
 **Framework:** Spec-Driven Development (SDD)  
-**Phase:** 4  
+**Phase:** 5  
 
 ---
 
@@ -36,3 +36,11 @@
 | **REQ-RECOVERY-002** | `backend/main.py` | Safe Restart Defaults. | Does not repeat pending or previously executed actions on startup; configurable kill-switch startup default. | `tests/test_restart_and_recovery.py::test_restart_does_not_repeat_pending_actions` |
 | **REQ-FAIL-001** | `backend/main.py` | Database and Ingestion Failure Handling. | Fails closed on audit write errors; returns controlled JSON errors; prevents stack trace leaks. | `tests/test_restart_and_recovery.py::test_database_write_failure_fails_closed` |
 | **REQ-DASH-004** | `frontend/` + `backend/main.py` | Real-Time Persistent Dashboard & Simulation Disclaimer. | Displays live monitoring status, persisted events count, SQLite storage badge, and explicit disclaimer that actions are simulated. | `tests/test_dashboard_and_stats_api.py` |
+| **REQ-EVAL-001** | `data/evaluation_dataset.json` | Labeled Ground-Truth Evaluation Dataset. | Multi-scenario benchmark with labeled normal, attack, multi-stage, and edge-case telemetry with explicit ground-truth categories and scenario IDs. | `tests/test_evaluation_runner.py::test_dataset_schema_and_integrity` |
+| **REQ-EVAL-002** | `backend/evaluation/metrics.py` | Event-Level Quantitative Detection Metrics. | Calculates TP, FP, TN, FN, Precision, Recall, F1, and False Positive Rate with documented zero-denominator handling. | `tests/test_evaluation_metrics.py::test_metric_calculation_and_edge_cases` |
+| **REQ-EVAL-003** | `backend/evaluation/metrics.py` | Per-Category Detection Evaluation. | Computes class-specific precision, recall, and F1 across all 6 threat categories and normal traffic. | `tests/test_evaluation_metrics.py::test_per_category_breakdown` |
+| **REQ-EVAL-004** | `backend/evaluation/eval_runner.py` | Rules vs ML vs Hybrid Pipeline Evaluation. | Evaluates deterministic rules alone, ML IsolationForest alone, and hybrid detection on holdout data without training leakage. | `tests/test_ml_evaluation.py::test_model_training_and_holdout_evaluation` |
+| **REQ-EVAL-005** | `backend/evaluation/correlation_eval.py` | Incident Correlation Quality Evaluation. | Evaluates attack sequence grouping, split/merge rates, timeline continuity, and cross-incident contamination. | `tests/test_evaluation_runner.py::test_incident_correlation_evaluation` |
+| **REQ-EVAL-006** | `backend/evaluation/eval_runner.py` | Risk Score & "Why" Evidence Evaluation. | Validates risk scores in [0, 100], confidence in [0.0, 1.0], and verifies evidence reflects true event attributes without fabrication. | `tests/test_evaluation_runner.py::test_risk_and_evidence_consistency` |
+| **REQ-EVAL-007** | `backend/evaluation/eval_runner.py` | Reproducible Evaluation Runner & Reports. | Executes benchmark in isolated database environment, generating machine-readable JSON and human-readable Markdown reports. | `tests/test_evaluation_runner.py::test_reproducible_runner_execution` |
+| **REQ-EVAL-008** | `frontend/` + `backend/main.py` | SOC Dashboard Detection Benchmark Integration. | Provides `/api/evaluation/latest` and `/api/evaluation/run` endpoints with dashboard benchmark metrics and explicit synthetic disclaimer. | `tests/test_dashboard_and_stats_api.py` |
