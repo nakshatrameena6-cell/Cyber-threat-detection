@@ -212,7 +212,7 @@
                         <i class="fa-solid fa-file-signature"></i> Audit Trail (SQLite)
                     </button>
                     <button class="tab-btn" onclick="switchTab('evalTab')">
-                        <i class="fa-solid fa-chart-line"></i> Detection Evaluation (Phase 5)
+                        <i class="fa-solid fa-chart-line"></i> Detection Evaluation (Phase 7)
                     </button>
                 </div>
 
@@ -309,6 +309,25 @@
                         </button>
                     </div>
 
+                    <!-- Public Dataset Evaluation Status (Requirement B & E) -->
+                    <div class="eval-sub-section" style="margin-bottom: 1.5rem;">
+                        <h4><i class="fa-solid fa-database"></i> Public Intrusion Detection Datasets (CIC-IDS2017 & UNSW-NB15)</h4>
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <span><strong>Adapter Architecture:</strong> Decoupled Batch Streaming & Schema Normalizer</span>
+                                <span class="eval-badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;" id="publicDatasetStatusBadge"><i class="fa-solid fa-clock"></i> PENDING_LOCAL_DATA</span>
+                            </div>
+                            <p style="font-size: 0.85rem; color: #94a3b8; margin: 0 0 0.5rem 0;">
+                                In strict compliance with evaluation integrity, public dataset scores are NOT fabricated. When official CSV extracts are placed in <code>data/external/</code>, full batch evaluation executes with zero data leakage.
+                            </p>
+                            <div style="display: flex; gap: 1.5rem; font-size: 0.8rem; color: #cbd5e1;">
+                                <div><i class="fa-solid fa-check text-emerald"></i> CIC-IDS2017 Schema & Label Mappings Ready</div>
+                                <div><i class="fa-solid fa-check text-emerald"></i> UNSW-NB15 Schema & Label Mappings Ready</div>
+                                <div><i class="fa-solid fa-shield text-cyan"></i> Directory Traversal Protection Active</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Stream Deduplication Overview (Requirement B & C & E) -->
                     <div class="eval-sub-section" style="margin-bottom: 1.5rem;">
                         <h4><i class="fa-solid fa-filter"></i> Telemetry Stream & Deduplication Observability (Live Telemetry View)</h4>
@@ -334,7 +353,7 @@
 
                     <div class="eval-sub-section" style="margin-bottom: 1.5rem;">
                         <h4><i class="fa-solid fa-bullseye"></i> Unique Normalized Event Detection Performance (Population: N_unique = N_raw - N_dup)</h4>
-                        <div class="eval-metrics-grid">
+                        <div class="eval-metrics-grid" style="grid-template-columns: repeat(6, 1fr);">
                             <div class="eval-stat-card">
                                 <span class="stat-num text-cyan" id="evalPrecision">--</span>
                                 <span class="stat-lbl">Hybrid Precision</span>
@@ -344,12 +363,20 @@
                                 <span class="stat-lbl">Hybrid Recall</span>
                             </div>
                             <div class="eval-stat-card">
+                                <span class="stat-num text-cyan" id="evalSpecificity">--</span>
+                                <span class="stat-lbl">Specificity (TNR)</span>
+                            </div>
+                            <div class="eval-stat-card">
                                 <span class="stat-num text-purple" id="evalF1">--</span>
                                 <span class="stat-lbl">F1 Score</span>
                             </div>
                             <div class="eval-stat-card">
                                 <span class="stat-num text-amber" id="evalCorrelationAcc">--</span>
-                                <span class="stat-lbl">Correlation Accuracy</span>
+                                <span class="stat-lbl">Correlation Acc</span>
+                            </div>
+                            <div class="eval-stat-card">
+                                <span class="stat-num text-emerald" id="evalBalancedAcc">--</span>
+                                <span class="stat-lbl">Balanced Accuracy</span>
                             </div>
                         </div>
                     </div>

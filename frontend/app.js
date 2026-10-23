@@ -577,8 +577,21 @@ function renderEvaluationReport(report) {
 
     document.getElementById("evalPrecision").innerText = (hybridM.precision * 100).toFixed(1) + "%";
     document.getElementById("evalRecall").innerText = (hybridM.recall * 100).toFixed(1) + "%";
+    
+    const specEl = document.getElementById("evalSpecificity");
+    if (specEl) {
+        const specVal = hybridM.specificity !== undefined ? hybridM.specificity : (1.0 - hybridM.false_positive_rate);
+        specEl.innerText = (specVal * 100).toFixed(1) + "%";
+    }
+
     document.getElementById("evalF1").innerText = hybridM.f1_score.toFixed(4);
     document.getElementById("evalCorrelationAcc").innerText = (corr.grouping_accuracy * 100).toFixed(1) + "%";
+
+    const balEl = document.getElementById("evalBalancedAcc");
+    if (balEl) {
+        const balVal = hybridM.balanced_accuracy !== undefined ? hybridM.balanced_accuracy : ((hybridM.recall + (1.0 - hybridM.false_positive_rate)) / 2.0);
+        balEl.innerText = (balVal * 100).toFixed(1) + "%";
+    }
 
     // Pipeline Comparison Table
     const pipe = report.pipeline_comparison;
