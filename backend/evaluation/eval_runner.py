@@ -334,12 +334,14 @@ class EvaluationRunner:
         report = {
             "evaluation_metadata": {
                 "timestamp": eval_timestamp,
-                "framework": "Spec-Driven Development (Phase 6 SDD: Precision Tuning, Deduplication Observability & Evaluation Hardening)",
+                "framework": "Spec-Driven Development (Phase 7 SDD: External Dataset Validation, Timestamp Resilience, Distributed Correlation & Metric Integrity)",
                 "dataset_path": self.dataset_path,
+                "dataset_identity": "Synthetic-Hardened-Multi-Scenario-v7",
                 "total_raw_events": total_raw_events,
                 "total_unique_events_analyzed": unique_events_analyzed,
                 "total_duplicates_suppressed": duplicates_suppressed,
                 "isolated_db_path": self.db_path,
+                "public_dataset_status": "PENDING_LOCAL_DATA"
             },
             "raw_stream_deduplication_metrics": stream_metrics,
             "overall_hybrid_metrics": {
@@ -381,6 +383,12 @@ class EvaluationRunner:
             }
         }
 
+        # Validate mathematical integrity gate (Requirement A)
+        is_valid, validation_errors = validate_evaluation_report(report)
+        if not is_valid:
+            raise ValueError(f"Evaluation report failed mathematical integrity check: {validation_errors}")
+        report["evaluation_metadata"]["validation_passed"] = True
+
         # Write reports
         self._write_reports(report)
         return report
@@ -406,13 +414,15 @@ class EvaluationRunner:
         ml_h = report["ml_holdout_evaluation"]["metrics"]
         stream_m = report["raw_stream_deduplication_metrics"]
 
-        md = f"""# Suraksha AI — Detection Quality & Deduplication Evaluation Summary (Phase 6)
+        md = f"""# Suraksha AI — Detection Quality, Distributed Correlation & Metric Integrity Summary (Phase 7)
 
 **Generated:** {report['evaluation_metadata']['timestamp']}  
-**Dataset:** `{report['evaluation_metadata']['dataset_path']}`  
+**Dataset:** `{report['evaluation_metadata']['dataset_path']}` ({report['evaluation_metadata']['dataset_identity']})  
 **Raw Events Received:** {report['evaluation_metadata']['total_raw_events']}  
 **Unique Events Analyzed:** {report['evaluation_metadata']['total_unique_events_analyzed']}  
 **Duplicate Events Suppressed:** {report['evaluation_metadata']['total_duplicates_suppressed']}  
+**Public Dataset Evaluation Status:** `{report['evaluation_metadata']['public_dataset_status']}` (Official external data not present locally; zero synthetic data fabricated)  
+**Mathematical Validation Gate:** PASSED (All invariants TP+FP+TN+FN verified)  
 **Database Isolation:** Verified (Isolated SQLite test DB)  
 
 ---
@@ -436,11 +446,13 @@ class EvaluationRunner:
 |---|---|---|
 | **Precision** | **{hybrid_m['precision']:.4f}** ({hybrid_m['precision']*100:.1f}%) | Ratio of true threat detections over all triggered alarms |
 | **Recall** | **{hybrid_m['recall']:.4f}** ({hybrid_m['recall']*100:.1f}%) | Ratio of detected threats over total actual unique threats |
+| **Specificity** | **{hybrid_m.get('specificity', 1.0 - hybrid_m['false_positive_rate']):.4f}** ({(hybrid_m.get('specificity', 1.0 - hybrid_m['false_positive_rate']))*100:.1f}%) | True negative rate (benign events correctly ignored) |
 | **F1 Score** | **{hybrid_m['f1_score']:.4f}** | Harmonic mean of Precision and Recall |
 | **False Positive Rate** | **{hybrid_m['false_positive_rate']:.4f}** ({hybrid_m['false_positive_rate']*100:.1f}%) | False alarms generated per normal operational event |
 | **Accuracy** | **{hybrid_m['accuracy']:.4f}** ({hybrid_m['accuracy']*100:.1f}%) | Overall correct classification rate on unique events |
+| **Balanced Accuracy** | **{hybrid_m.get('balanced_accuracy', (hybrid_m['recall'] + 1.0 - hybrid_m['false_positive_rate'])/2.0):.4f}** | Average of Recall and Specificity |
 
-### Unique Event Confusion Matrix
+### Unique Event Confusion Matrix (Population = {hybrid_cm['tp'] + hybrid_cm['fp'] + hybrid_cm['tn'] + hybrid_cm['fn']})
 - **True Positives (TP):** {hybrid_cm['tp']}
 - **False Positives (FP):** {hybrid_cm['fp']}
 - **True Negatives (TN):** {hybrid_cm['tn']}
