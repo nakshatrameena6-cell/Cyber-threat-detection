@@ -4,7 +4,7 @@ An end-to-end, spec-driven **AI Threat Detection, Real-Time Telemetry Ingestion,
 
 ---
 
-## 🌟 Core Features & Highlights
+## 🌟 Core Features & Highlights included in the system:
 
 - **Spec-Driven Development (SDD)**: Complete traceability matrix mapping requirements (`REQ-*`) to architecture, source code, and automated test cases (**111/111 tests passing, 100% pass rate**).
 - **Hardened Empirical Detection Quality Evaluation (Phase 7)**:
