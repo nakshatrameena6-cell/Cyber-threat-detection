@@ -1,4 +1,4 @@
-# Suraksha AI - Autonomous Cyber Threat Detection & Safe Response System
+# Suraksha AI - Autonomous Cyber Threat Detection & Safe Response System.
 
 An end-to-end, spec-driven **AI Threat Detection, Real-Time Telemetry Ingestion, SQLite Persistence, Detection Quality Evaluation, Timestamp Resilience, Distributed Correlation & Metric Integrity (Phase 7 MVP)** for college project demonstration.
 
